@@ -20,12 +20,11 @@ function loadBookedSlots() {
             if (data.result === 'success') {
                 bookedSlots = data.bookedSlots || {};
                 console.log('Занятые слоты:', bookedSlots);
-                if (selectedDate) renderTimeSlotsForDate(selectedDate);
-            } else {
-                console.warn('Ошибка получения слотов:', data.message);
             }
         })
-        .catch(error => console.error('Ошибка загрузки:', error));
+        .catch(error => {
+            console.error('Ошибка загрузки:', error);
+        });
 }
 
 function initializeDateSelector() {
@@ -119,10 +118,14 @@ function renderDates() {
 }
 
 function selectDate(date, element) {
-    document.querySelectorAll('.date-option').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.date-option').forEach(el => {
+        el.classList.remove('selected');
+    });
+    
     element.classList.add('selected');
     selectedDate = date;
     document.getElementById('selectedDate').value = formatDateForStorage(date);
+    
     showTimeSelection();
     renderTimeSlotsForDate(date);
 }
@@ -152,6 +155,14 @@ function renderTimeSlotsForDate(date) {
         if (isBooked) {
             timeElement.className = 'time-slot occupied';
             timeElement.innerHTML = `${slot}<br><small>Занято</small>`;
+            timeElement.style.cssText = `
+                cursor: not-allowed;
+                pointer-events: none;
+                opacity: 0.5;
+                background: #f8d7da;
+                color: #721c24;
+                border-color: #f5c6cb;
+            `;
         } else {
             timeElement.className = 'time-slot';
             timeElement.textContent = slot;
@@ -165,25 +176,35 @@ function renderTimeSlotsForDate(date) {
 }
 
 function selectTime(time, element) {
-    document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.time-slot').forEach(el => {
+        el.classList.remove('selected');
+    });
+    
     element.classList.add('selected');
     selectedTime = time;
     document.getElementById('selectedTime').value = time;
 }
 
 function setupEventListeners() {
+    // Простая маска телефона
     document.getElementById('phone').addEventListener('input', function(e) {
         let value = e.target.value.replace(/\D/g, '');
         if (value.length > 0) {
-            if (!value.startsWith('7')) value = '7' + value;
-            if (value.length > 1) value = '+7' + value.substring(1);
+            if (!value.startsWith('7')) {
+                value = '7' + value;
+            }
+            if (value.length > 1) {
+                value = '+7' + value.substring(1);
+            }
         }
         e.target.value = value;
     });
 
     document.getElementById('bookingForm').addEventListener('submit', function(e) {
         e.preventDefault();
+        
         if (!validateForm()) return;
+        
         submitForm();
     });
 }
@@ -196,28 +217,45 @@ function validateForm() {
             return false;
         }
     }
-    if (!selectedDate) { alert('Выберите дату'); return false; }
-    if (!selectedTime) { alert('Выберите время'); return false; }
+    
+    if (!selectedDate) {
+        alert('Выберите дату');
+        return false;
+    }
+    
+    if (!selectedTime) {
+        alert('Выберите время');
+        return false;
+    }
+    
     if (!document.getElementById('agree').checked) {
         alert('Необходимо согласие');
         return false;
     }
+    
     return true;
 }
 
 function submitForm() {
-    const submitBtn = document.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = '⏳ Отправка...';
-
+    let phone = document.getElementById('phone').value.replace(/\D/g, '');
+    if (phone.startsWith('7')) {
+        phone = phone.substring(1);
+    }
+    
     const formData = {
         name: document.getElementById('name').value.trim(),
-        phone: document.getElementById('phone').value.trim(),
+        phone: '+7' + phone,
         date: document.getElementById('selectedDate').value,
         time: selectedTime,
         service: document.getElementById('service').value,
         carModel: document.getElementById('carModel').value.trim()
     };
+
+    console.log("Отправляем:", formData);
+
+    const submitBtn = document.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = 'Отправка...';
 
     fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
@@ -228,19 +266,17 @@ function submitForm() {
         if (data.result === 'success') {
             document.getElementById('successMessage').style.display = 'block';
             resetForm();
-            loadBookedSlots(); // 🔄 сразу обновляем занятые слоты
+            setTimeout(loadBookedSlots, 1000);
         } else {
-            alert(data.message || 'Ошибка записи');
-            loadBookedSlots(); // обновим, чтобы отразить занятое время
+            alert(data.message);
         }
     })
     .catch(err => {
-        alert('Ошибка отправки. Попробуйте ещё раз.');
-        console.error(err);
+        alert('Ошибка отправки');
     })
     .finally(() => {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Записаться';
+        submitBtn.innerHTML = 'Записаться';
     });
 }
 
@@ -248,7 +284,9 @@ function resetForm() {
     document.getElementById('bookingForm').reset();
     selectedDate = null;
     selectedTime = null;
-    document.querySelectorAll('.date-option, .time-slot').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.date-option, .time-slot').forEach(el => {
+        el.classList.remove('selected');
+    });
     hideTimeSelection();
     renderDates();
 }
