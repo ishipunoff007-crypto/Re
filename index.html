@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Автосервис на Панина - профессиональный ремонт автомобилей</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">АВТОСЕРВИС НА ПАНИНА</h1>
+                <p class="tagline">Профессиональный ремонт и обслуживание автомобилей с гарантией качества</p>
+                <div class="floating-elements">
+                    <i class="floating-element fas fa-tools"></i>
+                    <i class="floating-element fas fa-car"></i>
+                    <i class="floating-element fas fa-cogs"></i>
+                    <i class="floating-element fas fa-screwdriver-wrench"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section class="form-section">
+        <div class="container">
+            <h2 class="form-title">Записаться на обслуживание</h2>
+            
+            <!-- Сообщение о приостановке записи -->
+            <div class="booking-disabled-message" id="bookingDisabledMessage">
+                <i class="fas fa-pause-circle"></i> Запись временно приостановлена. Приносим извинения за неудобства.
+            </div>
+
+            <!-- Сообщение об успехе -->
+            <div class="success-message" id="successMessage">
+                <i class="fas fa-check-circle"></i> Спасибо! Ваша заявка принята. Мы свяжемся с вами в ближайшее время.
+            </div>
+
+            <!-- Форма записи -->
+            <form class="booking-form" id="bookingForm">
+                <div class="form-group">
+                    <label for="name">Ваше имя *</label>
+                    <input type="text" id="name" class="form-control" placeholder="Введите ваше имя" required>
+                    <div class="error-message" id="nameError">Пожалуйста, введите ваше имя</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Номер телефона *</label>
+                    <input type="tel" id="phone" class="form-control" placeholder="+7 (999) 999-99-99" required>
+                    <div class="error-message" id="phoneError">Пожалуйста, введите корректный номер телефона</div>
+                </div>
+
+                <!-- Блок выбора даты -->
+                <div class="form-group">
+                    <label for="dateSelect">Выберите дату *</label>
+                    <div class="date-selector">
+                        <button type="button" class="date-nav-btn" id="prevWeekBtn">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="week-display" id="weekDisplay">
+                            Неделя 1 (01.01 - 07.01)
+                        </div>
+                        <button type="button" class="date-nav-btn" id="nextWeekBtn">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    <div class="dates-container" id="datesContainer">
+                        <!-- Даты будут загружены через JavaScript -->
+                    </div>
+                    <div class="error-message" id="dateError">Пожалуйста, выберите дату</div>
+                </div>
+
+                <!-- Блок выбора времени -->
+                <div class="form-group time-selection" id="timeSelection">
+                    <label>Выберите время *</label>
+                    <div class="time-slots" id="timeSlots">
+                        <!-- Временные слоты будут загружены через JavaScript -->
+                    </div>
+                    <div class="error-message" id="timeError">Пожалуйста, выберите время</div>
+                </div>
+
+                <!-- Скрытые поля для хранения выбранных значений -->
+                <input type="hidden" id="selectedDate" name="selectedDate">
+                <input type="hidden" id="selectedTime" name="selectedTime">
+
+                <div class="form-group">
+                    <label for="service">Выберите услугу *</label>
+                    <select id="service" class="form-control" required>
+                        <option value="">-- Выберите услугу --</option>
+                        <option value="Компьютерная диагностика">Компьютерная диагностика</option>
+                        <option value="Шиномонтаж">Шиномонтаж</option>
+                        <option value="Ремонт тормозов">Ремонт тормозов</option>
+                        <option value="Ремонт подвески">Ремонт подвески</option>
+                        <option value="Замена масла">Замена масла</option>
+                        <option value="Эндоскопия">Эндоскопия</option>
+                        <option value="Другое">Другое</option>
+                    </select>
+                    <div class="error-message" id="serviceError">Пожалуйста, выберите услугу</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="carModel">Модель автомобиля *</label>
+                    <input type="text" id="carModel" class="form-control" placeholder="Например: Toyota Camry" required>
+                    <div class="error-message" id="carModelError">Пожалуйста, укажите модель автомобиля</div>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="agree" required>
+                    <label for="agree">Я согласен на обработку моих персональных данных *</label>
+                </div>
+                <div class="error-message" id="agreeError">Необходимо ваше согласие</div>
+
+                <button type="submit" class="btn-primary" id="submitBtn">Записаться</button>
+            </form>
+
+            <div class="contact-buttons">
+                <a href="tel:+79301141692" class="contact-btn btn-call"><i class="fas fa-phone"></i> Позвонить</a>
+                <a href="https://wa.me/79301141692" class="contact-btn btn-whatsapp" target="_blank"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+                <a href="https://t.me/servispanina" class="contact-btn btn-telegram" target="_blank"><i class="fab fa-telegram"></i> Telegram</a>
+            </div>
+
+            <!-- Ссылка на админ-панель (малозаметная) -->
+            <div class="admin-link">
+                <a href="admin.html" class="admin-access-link">
+                    <i class="fas fa-cog"></i> Панель управления
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-info">
+                    <p><i class="fas fa-map-marker-alt"></i> Адрес: Ярославль. ул. Панина, 3к3</p>
+                    <p><i class="fas fa-clock"></i> Режим работы: Пн-Пт: 9:00-20:00, Сб-Вс: 9:00-20:00</p>
+                    <p><i class="fas fa-phone"></i> Телефон: +7 (930) 114-16-92</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

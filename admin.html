@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель управления - Автосервис на Панина</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #e63946;
+            --secondary: #1d3557;
+            --accent: #a8dadc;
+            --success: #2a9d8f;
+            --warning: #e9c46a;
+            --danger: #e76f51;
+            --dark: #212529;
+            --light: #f8f9fa;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .admin-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .admin-header {
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--primary) 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .admin-header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .admin-header p {
+            opacity: 0.9;
+        }
+
+        .admin-content {
+            padding: 40px;
+        }
+
+        .login-form {
+            text-align: center;
+        }
+
+        .login-form h2 {
+            color: var(--secondary);
+            margin-bottom: 30px;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(230, 57, 70, 0.2);
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(to right, var(--primary), #c1121f);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(230, 57, 70, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(to right, var(--secondary), #2c3e50);
+            color: white;
+            margin-top: 10px;
+        }
+
+        .control-panel {
+            display: none;
+        }
+
+        .status-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 5px solid var(--success);
+        }
+
+        .status-panel.paused {
+            border-left-color: var(--danger);
+        }
+
+        .status-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--secondary);
+        }
+
+        .status-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .status-active {
+            color: var(--success);
+        }
+
+        .status-paused {
+            color: var(--danger);
+        }
+
+        .control-buttons {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .btn-pause {
+            background: linear-gradient(to right, var(--danger), #d00000);
+            color: white;
+        }
+
+        .btn-resume {
+            background: linear-gradient(to right, var(--success), #1d3557);
+            color: white;
+        }
+
+        .recent-bookings {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .recent-bookings h3 {
+            color: var(--secondary);
+            margin-bottom: 15px;
+        }
+
+        .booking-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .booking-meta {
+            display: flex;
+            justify-content: between;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .booking-name {
+            font-weight: 600;
+            color: var(--secondary);
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message {
+            background: #d1edff;
+            color: #0c5460;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .logout-btn {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .logout-btn a {
+            color: var(--secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .logout-btn a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1><i class="fas fa-cog"></i> Панель управления</h1>
+            <p>Автосервис на Панина</p>
+        </div>
+
+        <div class="admin-content">
+            <!-- Форма входа -->
+            <div class="login-form" id="loginForm">
+                <h2>Вход в панель управления</h2>
+                
+                <div class="error-message" id="loginError">
+                    Неверный пароль. Попробуйте еще раз.
+                </div>
+
+                <div class="form-group">
+                    <label for="adminPassword"><i class="fas fa-lock"></i> Пароль администратора</label>
+                    <input type="password" id="adminPassword" class="form-control" placeholder="Введите пароль">
+                </div>
+
+                <button class="btn btn-primary" onclick="login()">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+
+                <div class="logout-btn">
+                    <a href="index.html"><i class="fas fa-arrow-left"></i> Вернуться на сайт</a>
+                </div>
+            </div>
+
+            <!-- Панель управления -->
+            <div class="control-panel" id="controlPanel">
+                <div class="status-panel" id="statusPanel">
+                    <div class="status-title">Статус записи:</div>
+                    <div class="status-value" id="statusValue">Загрузка...</div>
+                </div>
+
+                <div class="success-message" id="successMessage">
+                    Статус успешно обновлен!
+                </div>
+
+                <div class="error-message" id="errorMessage">
+                    Ошибка при обновлении статуса!
+                </div>
+
+                <div class="control-buttons">
+                    <button class="btn btn-pause" onclick="toggleBooking(false)">
+                        <i class="fas fa-pause"></i> Приостановить запись
+                    </button>
+                    <button class="btn btn-resume" onclick="toggleBooking(true)">
+                        <i class="fas fa-play"></i> Возобновить запись
+                    </button>
+                </div>
+
+                <div class="recent-bookings">
+                    <h3><i class="fas fa-history"></i> Последние записи</h3>
+                    <div id="recentBookings">
+                        <div class="loading">
+                            <div class="loading-spinner"></div>
+                            Загрузка записей...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="logout-btn">
+                    <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Выйти из панели</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Конфигурация
+        const ADMIN_PASSWORD = "autoservice2024"; // Замените на свой пароль
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZCRB99XVjp0v2HdbirOuOMPw_bWGUdtPymo3xBb-OOvzdHLnemHeW-CEkzEuTlswB/exec";
+
+        // Проверка авторизации при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            if (localStorage.getItem('adminAuthenticated') === 'true') {
+                showControlPanel();
+            }
+        });
+
+        // Функция входа
+        function login() {
+            const password = document.getElementById('adminPassword').value;
+            const errorElement = document.getElementById('loginError');
+
+            if (password === ADMIN_PASSWORD) {
+                localStorage.setItem('adminAuthenticated', 'true');
+                showControlPanel();
+            } else {
+                errorElement.style.display = 'block';
+                document.getElementById('adminPassword').value = '';
+                document.getElementById('adminPassword').focus();
+            }
+        }
+
+        // Функция выхода
+        function logout() {
+            localStorage.removeItem('adminAuthenticated');
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('controlPanel').style.display = 'none';
+            document.getElementById('adminPassword').value = '';
+        }
+
+        // Показать панель управления
+        function showControlPanel() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('controlPanel').style.display = 'block';
+            loadBookingStatus();
+            loadRecentBookings();
+        }
+
+        // Загрузка статуса записи
+        async function loadBookingStatus() {
+            try {
+                const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getBookingStatus`);
+                const data = await response.json();
+                
+                if (data.result === 'success') {
+                    const statusElement = document.getElementById('statusValue');
+                    const statusPanel = document.getElementById('statusPanel');
+                    
+                    if (data.isActive) {
+                        statusElement.innerHTML = '<span class="status-active">✅ ЗАПИСЬ АКТИВНА</span>';
+                        statusElement.className = 'status-value status-active';
+                        statusPanel.className = 'status-panel';
+                    } else {
+                        statusElement.innerHTML = '<span class="status-paused">⏸️ ЗАПИСЬ ПРИОСТАНОВЛЕНА</span>';
+                        statusElement.className = 'status-value status-paused';
+                        statusPanel.className = 'status-panel paused';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading status:', error);
+                document.getElementById('statusValue').textContent = 'Ошибка загрузки';
+            }
+        }
+
+        // Переключение статуса записи
+        async function toggleBooking(status) {
+            const successElement = document.getElementById('successMessage');
+            const errorElement = document.getElementById('errorMessage');
+            
+            // Скрываем сообщения
+            successElement.style.display = 'none';
+            errorElement.style.display = 'none';
+
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'toggleBooking',
+                        status: status
+                    }),
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.result === 'success') {
+                    successElement.textContent = data.message;
+                    successElement.style.display = 'block';
+                    loadBookingStatus();
+                    
+                    // Обновляем основную страницу (если открыта)
+                    if (window.opener) {
+                        window.opener.postMessage({ type: 'bookingStatusUpdated' }, '*');
+                    }
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (error) {
+                console.error('Error toggling booking:', error);
+                errorElement.textContent = 'Ошибка: ' + error.message;
+                errorElement.style.display = 'block';
+            }
+        }
+
+        // Загрузка последних записей
+        async function loadRecentBookings() {
+            try {
+                // В реальном приложении здесь будет запрос к API
+                // Покажем заглушку
+                setTimeout(() => {
+                    document.getElementById('recentBookings').innerHTML = `
+                        <div class="booking-item">
+                            <div class="booking-meta">
+                                <span>Сегодня, 14:30</span>
+                            </div>
+                            <div class="booking-name">Иван Петров</div>
+                            <div>Телефон: +7 (999) 123-45-67</div>
+                            <div>Услуга: Замена масла • Toyota Camry</div>
+                        </div>
+                        <div class="booking-item">
+                            <div class="booking-meta">
+                                <span>Сегодня, 16:00</span>
+                            </div>
+                            <div class="booking-name">Мария Сидорова</div>
+                            <div>Телефон: +7 (888) 765-43-21</div>
+                            <div>Услуга: Компьютерная диагностика • Honda Civic</div>
+                        </div>
+                    `;
+                }, 1000);
+            } catch (error) {
+                document.getElementById('recentBookings').innerHTML = 
+                    '<div style="color: #666; text-align: center;">Ошибка загрузки записей</div>';
+            }
+        }
+
+        // Ввод пароля по нажатию Enter
+        document.getElementById('adminPassword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+    </script>
+</body>
+</html>
