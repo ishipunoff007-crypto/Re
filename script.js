@@ -1,5 +1,5 @@
 // Конфигурация для Google Apps Script
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5EvyWDQMwsM1kWLuTx74ec4rKE8LLVveYEVOqfKHvWtSW3GvLiu5BNwOQE0IWXPVb/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzEc-LM2BRX4Ez-w3leYupVm7XE8Evq9nxsZWOsvkxqKkI1JWg7hUOG7aNHeRbpDw-Q/exec";
 
 // DOM элементы
 const form = document.getElementById('bookingForm');
@@ -172,83 +172,43 @@ function loadAvailableTimeSlots(date) {
             return response.json();
         })
         .then(data => {
-            console.log('Данные от сервера:', data);
+            console.log('Data from Google Sheets:', data);
             if (data.result === 'success' && data.availableSlots) {
-                // Получаем ВСЕ возможные слоты и отмечаем занятые
-                const allSlots = generateAllTimeSlots();
-                const availableSlots = data.availableSlots;
-                renderTimeSlotsWithOccupied(allSlots, availableSlots, timeSlotsContainer);
+                renderTimeSlotsFromGoogle(data.availableSlots, timeSlotsContainer);
             } else {
                 throw new Error('No available slots data');
             }
         })
         .catch(error => {
-            console.error('Ошибка загрузки времени:', error);
+            console.error('Error loading time slots from Google:', error);
             timeSlotsContainer.innerHTML = '<div class="error-time" style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки времени. Пожалуйста, обновите страницу.</div>';
         });
 }
 
-// Генерация всех возможных слотов времени
-function generateAllTimeSlots() {
-    const slots = [];
-    const startHour = 9;
-    const endHour = 20;
+// Рендер слотов времени из Google Таблиц
+function renderTimeSlotsFromGoogle(availableSlots, container) {
+    console.log('Rendering time slots from Google:', availableSlots);
     
-    for (let hour = startHour; hour < endHour; hour++) {
-        for (let minute = 0; minute < 60; minute += 30) {
-            const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            slots.push(timeString);
-        }
-    }
-    return slots;
-}
-
-// Рендер слотов времени с отметкой занятых
-function renderTimeSlotsWithOccupied(allSlots, availableSlots, container) {
-    console.log('Все слоты:', allSlots);
-    console.log('Доступные слоты:', availableSlots);
-    
-    if (!allSlots || allSlots.length === 0) {
-        container.innerHTML = '<div class="no-slots" style="text-align: center; padding: 20px; color: #666;">Нет доступного времени</div>';
+    if (!availableSlots || availableSlots.length === 0) {
+        container.innerHTML = '<div class="no-slots" style="text-align: center; padding: 20px; color: #666;">На выбранную дату нет свободного времени</div>';
         return;
     }
     
     container.innerHTML = '';
     
-    allSlots.forEach(slot => {
+    availableSlots.forEach(slot => {
         const timeElement = document.createElement('div');
-        const isAvailable = availableSlots.includes(slot);
-        
-        if (isAvailable) {
-            // Доступный слот
-            timeElement.className = 'time-slot';
-            timeElement.textContent = slot;
-            timeElement.addEventListener('click', function() {
-                selectTime(slot, timeElement);
-            });
-        } else {
-            // Занятый слот
-            timeElement.className = 'time-slot occupied';
-            timeElement.innerHTML = `
-                ${slot}
-                <div style="font-size: 0.7rem; margin-top: 2px; opacity: 0.8;">Занято</div>
-            `;
-            // Убираем возможность клика на занятые слоты
-            timeElement.style.cursor = 'not-allowed';
-        }
-        
+        timeElement.className = 'time-slot';
+        timeElement.textContent = slot;
+        timeElement.addEventListener('click', function() {
+            selectTime(slot, timeElement);
+        });
         container.appendChild(timeElement);
     });
 }
 
 // Выбор времени
 function selectTime(time, element) {
-    // Проверяем, не занят ли слот
-    if (element.classList.contains('occupied')) {
-        alert('Это время уже занято. Пожалуйста, выберите другое время.');
-        return;
-    }
-    
     document.querySelectorAll('.time-slot').forEach(el => {
         el.classList.remove('selected');
     });
@@ -503,4 +463,3 @@ function hideLoading() {
     submitButton.disabled = false;
     submitButton.innerHTML = 'Записаться';
 }
-
