@@ -409,7 +409,7 @@ function validateField(field) {
             else hideError(field, 'carModelError');
             break;
         case 'agree':
-            if (!field.checked) document.getElementById('agreeError').style.display = 'block');
+            if (!field.checked) document.getElementById('agreeError').style.display = 'block';
             else document.getElementById('agreeError').style.display = 'none';
             break;
     }
@@ -625,3 +625,4 @@ function hideLoading() {
     document.querySelector('.btn-text').style.display = 'inline-block';
     document.querySelector('.btn-loading').style.display = 'none';
 }
+
