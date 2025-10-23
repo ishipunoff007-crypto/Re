@@ -1,38 +1,35 @@
 // Конфигурация для Google Apps Script
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5EvyWDQMwsM1kWLuTx74ec4rKE8LLVveYEVOqfKHvWtSW3GvLiu5BNwOQE0IWXPVb/exec";
 
+// DOM элементы
+const form = document.getElementById('bookingForm');
+const phoneInput = document.getElementById('phone');
+const successMessage = document.getElementById('successMessage');
+const bookingDisabledMessage = document.getElementById('bookingDisabledMessage');
+const submitButton = form.querySelector('button[type="submit"]');
+
+// Переменные состояния
 let currentWeek = 0;
 let selectedDate = null;
 let selectedTime = null;
-let bookedSlots = {};
+let isBookingActive = true;
 
+// Инициализация
 document.addEventListener('DOMContentLoaded', function() {
-    console.log("🚀 Сайт загружен");
-    loadBookedSlots();
     initializeDateSelector();
+    loadBookingStatus();
     setupEventListeners();
+    hideTimeSelection();
 });
 
-function loadBookedSlots() {
-    fetch(GOOGLE_SCRIPT_URL)
-        .then(response => response.json())
-        .then(data => {
-            if (data.result === 'success') {
-                bookedSlots = data.bookedSlots || {};
-                console.log('Занятые слоты:', bookedSlots);
-            }
-        })
-        .catch(error => {
-            console.error('Ошибка загрузки:', error);
-        });
-}
-
+// Инициализация выбора даты
 function initializeDateSelector() {
     updateWeekNavigation();
     renderDates();
     setupWeekNavigation();
 }
 
+// Настройка навигации по неделям
 function setupWeekNavigation() {
     document.getElementById('prevWeekBtn').addEventListener('click', function() {
         if (currentWeek > 0) {
@@ -53,15 +50,23 @@ function setupWeekNavigation() {
     });
 }
 
+// Скрыть выбор времени
 function hideTimeSelection() {
-    document.getElementById('timeSelection').style.display = 'none';
+    const timeSelection = document.getElementById('timeSelection');
+    timeSelection.style.display = 'none';
     selectedTime = null;
     document.getElementById('selectedTime').value = '';
+    
+    document.querySelectorAll('.time-slot').forEach(el => {
+        el.classList.remove('selected');
+    });
 }
 
+// Обновление навигации по неделям
 function updateWeekNavigation() {
     const prevBtn = document.getElementById('prevWeekBtn');
     const nextBtn = document.getElementById('nextWeekBtn');
+    const weekDisplay = document.getElementById('weekDisplay');
     
     prevBtn.disabled = currentWeek === 0;
     nextBtn.disabled = currentWeek === 3;
@@ -70,10 +75,10 @@ function updateWeekNavigation() {
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + 6);
     
-    document.getElementById('weekDisplay').textContent = 
-        `Неделя ${currentWeek + 1} (${formatDate(startDate)} - ${formatDate(endDate)})`;
+    weekDisplay.textContent = `Неделя ${currentWeek + 1} (${formatDate(startDate)} - ${formatDate(endDate)})`;
 }
 
+// Получение даты начала недели
 function getWeekStartDate() {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() + (currentWeek * 7));
@@ -83,6 +88,7 @@ function getWeekStartDate() {
     return startDate;
 }
 
+// Рендер дат на неделю
 function renderDates() {
     const datesContainer = document.getElementById('datesContainer');
     const startDate = getWeekStartDate();
@@ -93,30 +99,39 @@ function renderDates() {
         const date = new Date(startDate);
         date.setDate(startDate.getDate() + i);
         
-        const dateElement = document.createElement('div');
-        dateElement.className = 'date-option';
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        if (date < today) {
-            dateElement.classList.add('disabled');
-        } else {
-            dateElement.addEventListener('click', function() {
-                selectDate(date, dateElement);
-            });
-        }
-        
-        dateElement.innerHTML = `
-            <div class="date-day">${getDayName(date)}</div>
-            <div class="date-number">${date.getDate()}</div>
-            <div class="date-month">${getMonthName(date)}</div>
-        `;
-        
+        const dateElement = createDateElement(date);
         datesContainer.appendChild(dateElement);
     }
 }
 
+// Создание элемента даты
+function createDateElement(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const dateElement = document.createElement('div');
+    dateElement.className = 'date-option';
+    
+    if (date < today) {
+        dateElement.classList.add('disabled');
+    }
+    
+    dateElement.innerHTML = `
+        <div class="date-day">${getDayName(date)}</div>
+        <div class="date-number">${date.getDate()}</div>
+        <div class="date-month">${getMonthName(date)}</div>
+    `;
+    
+    if (date >= today) {
+        dateElement.addEventListener('click', function() {
+            selectDate(date, dateElement);
+        });
+    }
+    
+    return dateElement;
+}
+
+// Выбор даты
 function selectDate(date, element) {
     document.querySelectorAll('.date-option').forEach(el => {
         el.classList.remove('selected');
@@ -127,55 +142,113 @@ function selectDate(date, element) {
     document.getElementById('selectedDate').value = formatDateForStorage(date);
     
     showTimeSelection();
-    renderTimeSlotsForDate(date);
+    loadAvailableTimeSlots(date);
+    hideError(null, 'dateError');
 }
 
+// Показать выбор времени
 function showTimeSelection() {
-    document.getElementById('timeSelection').style.display = 'block';
+    const timeSelection = document.getElementById('timeSelection');
+    timeSelection.style.display = 'block';
+    
+    setTimeout(() => {
+        timeSelection.style.opacity = '1';
+        timeSelection.style.transform = 'translateY(0)';
+    }, 10);
 }
 
-function renderTimeSlotsForDate(date) {
+// Загрузка доступных слотов времени из Google Таблиц
+function loadAvailableTimeSlots(date) {
     const timeSlotsContainer = document.getElementById('timeSlots');
+    timeSlotsContainer.innerHTML = '<div class="loading-time" style="text-align: center; padding: 20px; color: #666;">Загрузка доступного времени...</div>';
+    
     const dateString = formatDateForStorage(date);
-    const bookedForDate = bookedSlots[dateString] || [];
     
-    timeSlotsContainer.innerHTML = '';
+    fetch(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network error');
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Данные от сервера:', data);
+            if (data.result === 'success' && data.availableSlots) {
+                // Получаем ВСЕ возможные слоты и отмечаем занятые
+                const allSlots = generateAllTimeSlots();
+                const availableSlots = data.availableSlots;
+                renderTimeSlotsWithOccupied(allSlots, availableSlots, timeSlotsContainer);
+            } else {
+                throw new Error('No available slots data');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки времени:', error);
+            timeSlotsContainer.innerHTML = '<div class="error-time" style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки времени. Пожалуйста, обновите страницу.</div>';
+        });
+}
+
+// Генерация всех возможных слотов времени
+function generateAllTimeSlots() {
+    const slots = [];
+    const startHour = 9;
+    const endHour = 20;
     
-    const allSlots = [];
-    for (let hour = 9; hour < 20; hour++) {
+    for (let hour = startHour; hour < endHour; hour++) {
         for (let minute = 0; minute < 60; minute += 30) {
-            allSlots.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
+            const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+            slots.push(timeString);
         }
     }
+    return slots;
+}
+
+// Рендер слотов времени с отметкой занятых
+function renderTimeSlotsWithOccupied(allSlots, availableSlots, container) {
+    console.log('Все слоты:', allSlots);
+    console.log('Доступные слоты:', availableSlots);
+    
+    if (!allSlots || allSlots.length === 0) {
+        container.innerHTML = '<div class="no-slots" style="text-align: center; padding: 20px; color: #666;">Нет доступного времени</div>';
+        return;
+    }
+    
+    container.innerHTML = '';
     
     allSlots.forEach(slot => {
         const timeElement = document.createElement('div');
-        const isBooked = bookedForDate.includes(slot);
+        const isAvailable = availableSlots.includes(slot);
         
-        if (isBooked) {
-            timeElement.className = 'time-slot occupied';
-            timeElement.innerHTML = `${slot}<br><small>Занято</small>`;
-            timeElement.style.cssText = `
-                cursor: not-allowed;
-                pointer-events: none;
-                opacity: 0.5;
-                background: #f8d7da;
-                color: #721c24;
-                border-color: #f5c6cb;
-            `;
-        } else {
+        if (isAvailable) {
+            // Доступный слот
             timeElement.className = 'time-slot';
             timeElement.textContent = slot;
             timeElement.addEventListener('click', function() {
                 selectTime(slot, timeElement);
             });
+        } else {
+            // Занятый слот
+            timeElement.className = 'time-slot occupied';
+            timeElement.innerHTML = `
+                ${slot}
+                <div style="font-size: 0.7rem; margin-top: 2px; opacity: 0.8;">Занято</div>
+            `;
+            // Убираем возможность клика на занятые слоты
+            timeElement.style.cursor = 'not-allowed';
         }
         
-        timeSlotsContainer.appendChild(timeElement);
+        container.appendChild(timeElement);
     });
 }
 
+// Выбор времени
 function selectTime(time, element) {
+    // Проверяем, не занят ли слот
+    if (element.classList.contains('occupied')) {
+        alert('Это время уже занято. Пожалуйста, выберите другое время.');
+        return;
+    }
+    
     document.querySelectorAll('.time-slot').forEach(el => {
         el.classList.remove('selected');
     });
@@ -183,120 +256,220 @@ function selectTime(time, element) {
     element.classList.add('selected');
     selectedTime = time;
     document.getElementById('selectedTime').value = time;
+    hideError(null, 'timeError');
 }
 
+// Настройка обработчиков событий
 function setupEventListeners() {
-    // Простая маска телефона
-    document.getElementById('phone').addEventListener('input', function(e) {
-        let value = e.target.value.replace(/\D/g, '');
-        if (value.length > 0) {
-            if (!value.startsWith('7')) {
-                value = '7' + value;
-            }
-            if (value.length > 1) {
-                value = '+7' + value.substring(1);
-            }
+    // Маска для телефона
+    phoneInput.addEventListener('input', function(e) {
+        const x = e.target.value.replace(/\D/g, '').match(/(\d{0,1})(\d{0,3})(\d{0,3})(\d{0,2})(\d{0,2})/);
+        if (x) {
+            e.target.value = '+7' + (x[2] ? ' (' + x[2] : '') + (x[3] ? ') ' + x[3] : '') + (x[4] ? '-' + x[4] : '') + (x[5] ? '-' + x[5] : '');
         }
-        e.target.value = value;
     });
 
-    document.getElementById('bookingForm').addEventListener('submit', function(e) {
+    // Обработчик отправки формы
+    form.addEventListener('submit', function(e) {
         e.preventDefault();
         
-        if (!validateForm()) return;
+        if (!isBookingActive) {
+            alert('Запись временно приостановлена. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону.');
+            return;
+        }
         
+        if (!validateForm()) {
+            return;
+        }
+
         submitForm();
+    });
+
+    // Дополнительная валидация при изменении полей
+    form.querySelectorAll('input, select').forEach(element => {
+        element.addEventListener('blur', function() {
+            validateForm();
+        });
+    });
+
+    // Обработчик для кнопки согласия
+    document.getElementById('agree').addEventListener('change', function() {
+        if (this.checked) {
+            document.getElementById('agreeError').style.display = 'none';
+        }
     });
 }
 
-function validateForm() {
-    const fields = ['name', 'phone', 'service', 'carModel'];
-    for (const field of fields) {
-        if (!document.getElementById(field).value.trim()) {
-            alert(`Заполните поле: ${field}`);
-            return false;
-        }
-    }
-    
-    if (!selectedDate) {
-        alert('Выберите дату');
-        return false;
-    }
-    
-    if (!selectedTime) {
-        alert('Выберите время');
-        return false;
-    }
-    
-    if (!document.getElementById('agree').checked) {
-        alert('Необходимо согласие');
-        return false;
-    }
-    
-    return true;
+// Загрузка статуса записи
+function loadBookingStatus() {
+    fetch(`${GOOGLE_SCRIPT_URL}?action=getBookingStatus`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.result === 'success') {
+                isBookingActive = data.isActive;
+                updateBookingUI();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading booking status:', error);
+            isBookingActive = true;
+            updateBookingUI();
+        });
 }
 
-function submitForm() {
-    let phone = document.getElementById('phone').value.replace(/\D/g, '');
-    if (phone.startsWith('7')) {
-        phone = phone.substring(1);
+// Обновление UI в зависимости от статуса записи
+function updateBookingUI() {
+    if (isBookingActive) {
+        bookingDisabledMessage.style.display = 'none';
+        form.style.display = 'block';
+    } else {
+        bookingDisabledMessage.style.display = 'block';
+        form.style.display = 'none';
     }
-    
+}
+
+// Валидация формы
+function validateForm() {
+    let isValid = true;
+
+    // Валидация имени
+    const nameInput = document.getElementById('name');
+    if (!nameInput.value.trim()) {
+        showError(nameInput, 'nameError');
+        isValid = false;
+    } else {
+        hideError(nameInput, 'nameError');
+    }
+
+    // Валидация телефона
+    const phoneDigits = phoneInput.value.replace(/\D/g,'');
+    if (phoneDigits.length !== 11) {
+        showError(phoneInput, 'phoneError');
+        isValid = false;
+    } else {
+        hideError(phoneInput, 'phoneError');
+    }
+
+    // Валидация даты
+    if (!selectedDate) {
+        document.getElementById('dateError').style.display = 'block';
+        isValid = false;
+    } else {
+        document.getElementById('dateError').style.display = 'none';
+    }
+
+    // Валидация времени
+    if (!selectedTime) {
+        document.getElementById('timeError').style.display = 'block';
+        isValid = false;
+    } else {
+        document.getElementById('timeError').style.display = 'none';
+    }
+
+    // Валидация услуги
+    const serviceInput = document.getElementById('service');
+    if (!serviceInput.value) {
+        showError(serviceInput, 'serviceError');
+        isValid = false;
+    } else {
+        hideError(serviceInput, 'serviceError');
+    }
+
+    // Валидация модели автомобиля
+    const carModelInput = document.getElementById('carModel');
+    if (!carModelInput.value.trim()) {
+        showError(carModelInput, 'carModelError');
+        isValid = false;
+    } else {
+        hideError(carModelInput, 'carModelError');
+    }
+
+    // Валидация согласия
+    const agreeInput = document.getElementById('agree');
+    if (!agreeInput.checked) {
+        document.getElementById('agreeError').style.display = 'block';
+        isValid = false;
+    } else {
+        document.getElementById('agreeError').style.display = 'none';
+    }
+
+    return isValid;
+}
+
+// Отправка формы
+function submitForm() {
     const formData = {
         name: document.getElementById('name').value.trim(),
-        phone: '+7' + phone,
+        phone: phoneInput.value.trim(),
         date: document.getElementById('selectedDate').value,
         time: selectedTime,
         service: document.getElementById('service').value,
-        carModel: document.getElementById('carModel').value.trim()
+        carModel: document.getElementById('carModel').value.trim(),
+        timestamp: new Date().toISOString()
     };
 
-    console.log("Отправляем:", formData);
-
-    const submitBtn = document.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = 'Отправка...';
+    showLoading();
 
     fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
+        headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+        }
     })
     .then(resp => resp.json())
     .then(data => {
+        console.log('Ответ от сервера:', data);
+        
         if (data.result === 'success') {
-            document.getElementById('successMessage').style.display = 'block';
+            showSuccessMessage(formData);
             resetForm();
-            setTimeout(loadBookedSlots, 1000);
         } else {
-            alert(data.message);
+            alert('Ошибка при записи: ' + (data.message || 'неизвестная ошибка'));
         }
     })
     .catch(err => {
-        alert('Ошибка отправки');
+        console.error('Ошибка при отправке:', err);
+        alert('Не удалось отправить запись. Пожалуйста, попробуйте еще раз или свяжитесь с нами по телефону.');
     })
     .finally(() => {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = 'Записаться';
+        hideLoading();
     });
 }
 
+// Показать сообщение об успехе
+function showSuccessMessage(formData) {
+    successMessage.style.display = 'block';
+    successMessage.scrollIntoView({ behavior: 'smooth' });
+    
+    setTimeout(() => {
+        successMessage.style.display = 'none';
+    }, 5000);
+}
+
+// Сброс формы
 function resetForm() {
-    document.getElementById('bookingForm').reset();
+    form.reset();
     selectedDate = null;
     selectedTime = null;
+    
     document.querySelectorAll('.date-option, .time-slot').forEach(el => {
         el.classList.remove('selected');
     });
+    
     hideTimeSelection();
     renderDates();
 }
 
+// Вспомогательные функции
 function getDayName(date) {
-    return ['ВС','ПН','ВТ','СР','ЧТ','ПТ','СБ'][date.getDay()];
+    const days = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
+    return days[date.getDay()];
 }
 
 function getMonthName(date) {
-    return ['ЯНВ','ФЕВ','МАР','АПР','МАЙ','ИЮН','ИЮЛ','АВГ','СЕН','ОКТ','НОЯ','ДЕК'][date.getMonth()];
+    const months = ['ЯНВ', 'ФЕВ', 'МАР', 'АПР', 'МАЙ', 'ИЮН', 'ИЮЛ', 'АВГ', 'СЕН', 'ОКТ', 'НОЯ', 'ДЕК'];
+    return months[date.getMonth()];
 }
 
 function formatDate(date) {
@@ -306,3 +479,28 @@ function formatDate(date) {
 function formatDateForStorage(date) {
     return date.toISOString().split('T')[0];
 }
+
+// Показать ошибку
+function showError(input, errorId) {
+    if (input) input.classList.add('error');
+    document.getElementById(errorId).style.display = 'block';
+}
+
+// Скрыть ошибку
+function hideError(input, errorId) {
+    if (input) input.classList.remove('error');
+    document.getElementById(errorId).style.display = 'none';
+}
+
+// Показать индикатор загрузки
+function showLoading() {
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка...';
+}
+
+// Скрыть индикатор загрузки
+function hideLoading() {
+    submitButton.disabled = false;
+    submitButton.innerHTML = 'Записаться';
+}
+
