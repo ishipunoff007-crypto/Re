@@ -28,13 +28,26 @@
             <h2 class="form-title">Записаться на обслуживание</h2>
             
             <!-- Сообщение о приостановке записи -->
-            <div class="booking-disabled-message" id="bookingDisabledMessage">
-                <i class="fas fa-pause-circle"></i> Запись временно приостановлена. Приносим извинения за неудобства.
+            <div class="booking-disabled-message" id="bookingDisabledMessage" style="display: none;">
+                <i class="fas fa-pause-circle"></i> 
+                <span id="pauseMessageText">Запись временно приостановлена. Приносим извинения за неудобства.</span>
             </div>
 
             <!-- Сообщение об успехе -->
-            <div class="success-message" id="successMessage">
-                <i class="fas fa-check-circle"></i> Спасибо! Ваша заявка принята. Мы свяжемся с вами в ближайшее время.
+            <div class="success-message" id="successMessage" style="display: none;">
+                <i class="fas fa-check-circle"></i> 
+                <span id="successMessageText">Спасибо! Ваша заявка принята. Мы свяжемся с вами в ближайшее время.</span>
+            </div>
+
+            <!-- Сообщение об ошибке -->
+            <div class="error-message global-error" id="globalError" style="display: none;">
+                <i class="fas fa-exclamation-circle"></i> 
+                <span id="errorMessageText">Произошла ошибка. Пожалуйста, попробуйте позже.</span>
+            </div>
+
+            <!-- Индикатор загрузки -->
+            <div class="loading-indicator" id="loadingIndicator" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i> Загрузка доступных дат...
             </div>
 
             <!-- Форма записи -->
@@ -42,42 +55,62 @@
                 <div class="form-group">
                     <label for="name">Ваше имя *</label>
                     <input type="text" id="name" class="form-control" placeholder="Введите ваше имя" required>
-                    <div class="error-message" id="nameError">Пожалуйста, введите ваше имя</div>
+                    <div class="error-message field-error" id="nameError">Пожалуйста, введите ваше имя</div>
                 </div>
 
                 <div class="form-group">
                     <label for="phone">Номер телефона *</label>
                     <input type="tel" id="phone" class="form-control" placeholder="+7 (999) 999-99-99" required>
-                    <div class="error-message" id="phoneError">Пожалуйста, введите корректный номер телефона</div>
+                    <div class="error-message field-error" id="phoneError">Пожалуйста, введите корректный номер телефона</div>
                 </div>
 
-                <!-- Блок выбора даты -->
-                <div class="form-group">
-                    <label for="dateSelect">Выберите дату *</label>
-                    <div class="date-selector">
-                        <button type="button" class="date-nav-btn" id="prevWeekBtn">
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                        <div class="week-display" id="weekDisplay">
-                            Неделя 1 (01.01 - 07.01)
+                <!-- Блок выбора даты и времени -->
+                <div class="datetime-selection" id="datetimeSelection">
+                    <!-- Блок выбора даты -->
+                    <div class="form-group">
+                        <label>Выберите дату *</label>
+                        <div class="calendar-header">
+                            <button type="button" class="date-nav-btn" id="prevMonthBtn" title="Предыдущий месяц">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="month-display" id="monthDisplay">
+                                <!-- Месяц и год будут обновляться через JS -->
+                            </div>
+                            <button type="button" class="date-nav-btn" id="nextMonthBtn" title="Следующий месяц">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
                         </div>
-                        <button type="button" class="date-nav-btn" id="nextWeekBtn">
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
+                        
+                        <div class="calendar-container">
+                            <div class="week-days">
+                                <div>Пн</div>
+                                <div>Вт</div>
+                                <div>Ср</div>
+                                <div>Чт</div>
+                                <div>Пт</div>
+                                <div>Сб</div>
+                                <div>Вс</div>
+                            </div>
+                            <div class="calendar-grid" id="calendarGrid">
+                                <!-- Календарь будет генерироваться через JavaScript -->
+                            </div>
+                        </div>
+                        <div class="error-message field-error" id="dateError">Пожалуйста, выберите дату</div>
                     </div>
-                    <div class="dates-container" id="datesContainer">
-                        <!-- Даты будут загружены через JavaScript -->
-                    </div>
-                    <div class="error-message" id="dateError">Пожалуйста, выберите дату</div>
-                </div>
 
-                <!-- Блок выбора времени -->
-                <div class="form-group time-selection" id="timeSelection">
-                    <label>Выберите время *</label>
-                    <div class="time-slots" id="timeSlots">
-                        <!-- Временные слоты будут загружены через JavaScript -->
+                    <!-- Блок выбора времени -->
+                    <div class="form-group time-selection" id="timeSelection" style="display: none;">
+                        <label>Выберите время *</label>
+                        <div class="selected-date-info" id="selectedDateInfo">
+                            <!-- Информация о выбранной дате -->
+                        </div>
+                        <div class="time-slots-container">
+                            <div class="time-slots" id="timeSlots">
+                                <!-- Временные слоты будут загружены через JavaScript -->
+                            </div>
+                        </div>
+                        <div class="error-message field-error" id="timeError">Пожалуйста, выберите время</div>
                     </div>
-                    <div class="error-message" id="timeError">Пожалуйста, выберите время</div>
                 </div>
 
                 <!-- Скрытые поля для хранения выбранных значений -->
@@ -96,22 +129,32 @@
                         <option value="Эндоскопия">Эндоскопия</option>
                         <option value="Другое">Другое</option>
                     </select>
-                    <div class="error-message" id="serviceError">Пожалуйста, выберите услугу</div>
+                    <div class="error-message field-error" id="serviceError">Пожалуйста, выберите услугу</div>
                 </div>
 
                 <div class="form-group">
                     <label for="carModel">Модель автомобиля *</label>
                     <input type="text" id="carModel" class="form-control" placeholder="Например: Toyota Camry" required>
-                    <div class="error-message" id="carModelError">Пожалуйста, укажите модель автомобиля</div>
+                    <div class="error-message field-error" id="carModelError">Пожалуйста, укажите модель автомобиля</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="comments">Комментарий (необязательно)</label>
+                    <textarea id="comments" class="form-control" placeholder="Дополнительная информация о вашем автомобиле или проблеме..." rows="3"></textarea>
                 </div>
 
                 <div class="checkbox-group">
                     <input type="checkbox" id="agree" required>
                     <label for="agree">Я согласен на обработку моих персональных данных *</label>
                 </div>
-                <div class="error-message" id="agreeError">Необходимо ваше согласие</div>
+                <div class="error-message field-error" id="agreeError">Необходимо ваше согласие</div>
 
-                <button type="submit" class="btn-primary" id="submitBtn">Записаться</button>
+                <button type="submit" class="btn-primary" id="submitBtn" disabled>
+                    <span class="btn-text">Записаться</span>
+                    <span class="btn-loading" style="display: none;">
+                        <i class="fas fa-spinner fa-spin"></i> Отправка...
+                    </span>
+                </button>
             </form>
 
             <div class="contact-buttons">
@@ -144,3 +187,5 @@
     <script src="script.js"></script>
 </body>
 </html>
+
+
