@@ -1,100 +1,192 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Автосервис на Панина - запись онлайн</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link rel="stylesheet" href="style.css">
-<style>
-/* Минимальные стили для календаря и формы */
-.calendar-container { border:1px solid #ccc; padding:10px; width: 300px; }
-.calendar-header { display:flex; justify-content: space-between; align-items:center; margin-bottom:5px; }
-.week-days { display:grid; grid-template-columns: repeat(7, 1fr); text-align:center; font-weight:bold; margin-bottom:5px;}
-.calendar-grid { display:grid; grid-template-columns: repeat(7, 1fr); gap:3px; }
-.calendar-cell { text-align:center; padding:5px; cursor:pointer; border-radius:3px; }
-.calendar-cell.disabled { color:#aaa; cursor:not-allowed; }
-.calendar-cell.selected { background:#007bff; color:white; }
-.form-group { margin-bottom:15px; }
-.error-message { color:red; display:none; margin-top:3px; }
-.success-message { color:green; display:none; margin-bottom:10px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Автосервис на Панина - профессиональный ремонт автомобилей</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<section class="form-section">
-    <div class="container">
-        <h2>Записаться на обслуживание</h2>
-
-        <div class="success-message" id="successMessage">Запись успешно добавлена!</div>
-        <div class="error-message" id="globalError">Произошла ошибка. Пожалуйста, попробуйте позже.</div>
-        <div class="booking-disabled-message" id="bookingDisabledMessage">Запись временно приостановлена.</div>
-
-        <form id="bookingForm">
-            <div class="form-group">
-                <label>Имя *</label>
-                <input type="text" id="nameInput" required>
-            </div>
-            <div class="form-group">
-                <label>Телефон *</label>
-                <input type="tel" id="phoneInput" required>
-            </div>
-
-            <!-- Календарь -->
-            <div class="form-group">
-                <label>Выберите дату *</label>
-                <div class="calendar-container">
-                    <div class="calendar-header">
-                        <button type="button" id="prevMonthBtn"><i class="fas fa-chevron-left"></i></button>
-                        <span id="monthDisplay"></span>
-                        <button type="button" id="nextMonthBtn"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-                    <div class="week-days">
-                        <div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div>
-                        <div>Пт</div><div>Сб</div><div>Вс</div>
-                    </div>
-                    <div class="calendar-grid" id="calendarGrid"></div>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">АВТОСЕРВИС НА ПАНИНА</h1>
+                <p class="tagline">Профессиональный ремонт и обслуживание автомобилей с гарантией качества</p>
+                <div class="floating-elements">
+                    <i class="floating-element fas fa-tools"></i>
+                    <i class="floating-element fas fa-car"></i>
+                    <i class="floating-element fas fa-cogs"></i>
+                    <i class="floating-element fas fa-screwdriver-wrench"></i>
                 </div>
             </div>
+        </div>
+    </header>
 
-            <div class="form-group">
-                <label>Выберите время *</label>
-                <select id="timeInput" required></select>
+    <section class="form-section">
+        <div class="container">
+            <h2 class="form-title">Записаться на обслуживание</h2>
+            
+            <!-- Сообщение о приостановке записи -->
+            <div class="booking-disabled-message" id="bookingDisabledMessage" style="display: none;">
+                <i class="fas fa-pause-circle"></i> 
+                <span id="pauseMessageText">Запись временно приостановлена. Приносим извинения за неудобства.</span>
             </div>
 
-            <div class="form-group">
-                <label>Услуга *</label>
-                <select id="serviceInput" required>
-                    <option value="">-- Выберите услугу --</option>
-                    <option value="Компьютерная диагностика">Компьютерная диагностика</option>
-                    <option value="Шиномонтаж">Шиномонтаж</option>
-                    <option value="Ремонт тормозов">Ремонт тормозов</option>
-                    <option value="Ремонт подвески">Ремонт подвески</option>
-                    <option value="Замена масла">Замена масла</option>
-                    <option value="Эндоскопия">Эндоскопия</option>
-                    <option value="Другое">Другое</option>
-                </select>
+            <!-- Сообщение об успехе -->
+            <div class="success-message" id="successMessage" style="display: none;">
+                <i class="fas fa-check-circle"></i> 
+                <span id="successMessageText">Спасибо! Ваша заявка принята. Мы свяжемся с вами в ближайшее время.</span>
             </div>
 
-            <div class="form-group">
-                <label>Модель автомобиля *</label>
-                <input type="text" id="carInput" required>
+            <!-- Сообщение об ошибке -->
+            <div class="error-message global-error" id="globalError" style="display: none;">
+                <i class="fas fa-exclamation-circle"></i> 
+                <span id="errorMessageText">Произошла ошибка. Пожалуйста, попробуйте позже.</span>
             </div>
 
-            <div class="form-group">
-                <label>Комментарий</label>
-                <textarea id="commentsInput"></textarea>
+            <!-- Индикатор загрузки -->
+            <div class="loading-indicator" id="loadingIndicator" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i> Загрузка доступных дат...
             </div>
 
-            <div class="form-group">
-                <input type="checkbox" id="agree" required> Я согласен на обработку данных *
+            <!-- Форма записи -->
+            <form class="booking-form" id="bookingForm">
+                <div class="form-group">
+                    <label for="name">Ваше имя *</label>
+                    <input type="text" id="name" class="form-control" placeholder="Введите ваше имя" required>
+                    <div class="error-message field-error" id="nameError">Пожалуйста, введите ваше имя</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">Номер телефона *</label>
+                    <input type="tel" id="phone" class="form-control" placeholder="+7 (999) 999-99-99" required>
+                    <div class="error-message field-error" id="phoneError">Пожалуйста, введите корректный номер телефона</div>
+                </div>
+
+                <!-- Блок выбора даты и времени -->
+                <div class="datetime-selection" id="datetimeSelection">
+                    <!-- Блок выбора даты -->
+                    <div class="form-group">
+                        <label>Выберите дату *</label>
+                        <div class="calendar-header">
+                            <button type="button" class="date-nav-btn" id="prevMonthBtn" title="Предыдущий месяц">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="month-display" id="monthDisplay">
+                                <!-- Месяц и год будут обновляться через JS -->
+                            </div>
+                            <button type="button" class="date-nav-btn" id="nextMonthBtn" title="Следующий месяц">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="calendar-container">
+                            <div class="week-days">
+                                <div>Пн</div>
+                                <div>Вт</div>
+                                <div>Ср</div>
+                                <div>Чт</div>
+                                <div>Пт</div>
+                                <div>Сб</div>
+                                <div>Вс</div>
+                            </div>
+                            <div class="calendar-grid" id="calendarGrid">
+                                <!-- Календарь будет генерироваться через JavaScript -->
+                            </div>
+                        </div>
+                        <div class="error-message field-error" id="dateError">Пожалуйста, выберите дату</div>
+                    </div>
+
+                    <!-- Блок выбора времени -->
+                    <div class="form-group time-selection" id="timeSelection" style="display: none;">
+                        <label>Выберите время *</label>
+                        <div class="selected-date-info" id="selectedDateInfo">
+                            <!-- Информация о выбранной дате -->
+                        </div>
+                        <div class="time-slots-container">
+                            <div class="time-slots" id="timeSlots">
+                                <!-- Временные слоты будут загружены через JavaScript -->
+                            </div>
+                            <div class="no-slots-message" id="noSlotsMessage" style="display: none;">
+                                На выбранную дату нет свободных временных слотов
+                            </div>
+                        </div>
+                        <div class="error-message field-error" id="timeError">Пожалуйста, выберите время</div>
+                    </div>
+                </div>
+
+                <!-- Скрытые поля для хранения выбранных значений -->
+                <input type="hidden" id="selectedDate" name="selectedDate">
+                <input type="hidden" id="selectedTime" name="selectedTime">
+
+                <div class="form-group">
+                    <label for="service">Выберите услугу *</label>
+                    <select id="service" class="form-control" required>
+                        <option value="">-- Выберите услугу --</option>
+                        <option value="Компьютерная диагностика">Компьютерная диагностика</option>
+                        <option value="Шиномонтаж">Шиномонтаж</option>
+                        <option value="Ремонт тормозов">Ремонт тормозов</option>
+                        <option value="Ремонт подвески">Ремонт подвески</option>
+                        <option value="Замена масла">Замена масла</option>
+                        <option value="Эндоскопия">Эндоскопия</option>
+                        <option value="Другое">Другое</option>
+                    </select>
+                    <div class="error-message field-error" id="serviceError">Пожалуйста, выберите услугу</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="carModel">Модель автомобиля *</label>
+                    <input type="text" id="carModel" class="form-control" placeholder="Например: Toyota Camry" required>
+                    <div class="error-message field-error" id="carModelError">Пожалуйста, укажите модель автомобиля</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="comments">Комментарий (необязательно)</label>
+                    <textarea id="comments" class="form-control" placeholder="Дополнительная информация о вашем автомобиле или проблеме..." rows="3"></textarea>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="agree" required>
+                    <label for="agree">Я согласен на обработку моих персональных данных *</label>
+                </div>
+                <div class="error-message field-error" id="agreeError">Необходимо ваше согласие</div>
+
+                <button type="submit" class="btn-primary" id="submitBtn" disabled>
+                    <span class="btn-text">Записаться</span>
+                    <span class="btn-loading" style="display: none;">
+                        <i class="fas fa-spinner fa-spin"></i> Отправка...
+                    </span>
+                </button>
+            </form>
+
+            <div class="contact-buttons">
+                <a href="tel:+79301141692" class="contact-btn btn-call"><i class="fas fa-phone"></i> Позвонить</a>
+                <a href="https://wa.me/79301141692" class="contact-btn btn-whatsapp" target="_blank"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+                <a href="https://t.me/servispanina" class="contact-btn btn-telegram" target="_blank"><i class="fab fa-telegram"></i> Telegram</a>
             </div>
 
-            <button type="submit" id="submitBtn">Записаться</button>
-        </form>
-    </div>
-</section>
+            <!-- Ссылка на админ-панель (малозаметная) -->
+            <div class="admin-link">
+                <a href="admin.html" class="admin-access-link">
+                    <i class="fas fa-cog"></i> Панель управления
+                </a>
+            </div>
+        </div>
+    </section>
 
-<script src="script.js"></script>
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-info">
+                    <p><i class="fas fa-map-marker-alt"></i> Адрес: Ярославль. ул. Панина, 3к3</p>
+                    <p><i class="fas fa-clock"></i> Режим работы: Пн-Пт: 9:00-20:00, Сб-Вс: 9:00-20:00</p>
+                    <p><i class="fas fa-phone"></i> Телефон: +7 (930) 114-16-92</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
 </body>
 </html>
