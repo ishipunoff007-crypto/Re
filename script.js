@@ -13,12 +13,14 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let selectedDate = null;
 let selectedTime = null;
+let availableSlotsCache = {};
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
     initializeCalendar();
     setupEventListeners();
     hideTimeSelection();
+    updateSubmitButton();
 });
 
 // Инициализация календаря
@@ -147,8 +149,7 @@ function isWithinFourWeeks(date) {
 }
 
 // Выбор даты
-function selectDate(date, element) {
-    // Сбрасываем предыдущий выбор
+async function selectDate(date, element) {
     document.querySelectorAll('.calendar-day').forEach(el => {
         el.classList.remove('selected');
     });
@@ -159,6 +160,10 @@ function selectDate(date, element) {
     
     showTimeSelection();
     hideError(null, 'dateError');
+    
+    // Загружаем доступные слоты с сервера
+    await loadAvailableTimeSlots(date);
+    updateSubmitButton();
 }
 
 // Показать выбор времени
@@ -175,9 +180,6 @@ function showTimeSelection() {
     
     selectedDateInfo.textContent = `Выбрана дата: ${dateString}`;
     timeSelection.style.display = 'block';
-    
-    // Генерируем временные слоты
-    generateTimeSlots();
 }
 
 // Скрыть выбор времени
@@ -192,35 +194,59 @@ function hideTimeSelection() {
     });
 }
 
-// Генерация временных слотов
-function generateTimeSlots() {
+// Загрузка доступных слотов с сервера
+async function loadAvailableTimeSlots(date) {
     const timeSlotsContainer = document.getElementById('timeSlots');
     const noSlotsMessage = document.getElementById('noSlotsMessage');
+    const dateString = formatDateForStorage(date);
     
+    // Показываем индикатор загрузки
     timeSlotsContainer.innerHTML = '';
     noSlotsMessage.style.display = 'none';
+    timeSlotsContainer.innerHTML = `
+        <div class="loading" style="text-align: center; padding: 20px; color: #666;">
+            <i class="fas fa-spinner fa-spin"></i> Загрузка доступного времени...
+        </div>
+    `;
     
-    // Фиксированные рабочие часы
-    const workHours = { start: "09:00", end: "20:00" };
-    const slots = [];
-    
-    let currentHour = 9;
-    let currentMinute = 0;
-    
-    // Генерируем слоты с 9:00 до 20:00 каждые 30 минут
-    while (currentHour < 20 || (currentHour === 20 && currentMinute === 0)) {
-        const timeString = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
-        slots.push(timeString);
-        
-        currentMinute += 30;
-        if (currentMinute >= 60) {
-            currentHour += 1;
-            currentMinute = 0;
+    try {
+        // Проверяем кэш
+        if (availableSlotsCache[dateString]) {
+            renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
+            return;
         }
+        
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`);
+        const data = await response.json();
+        
+        if (data.result === 'success' && data.data.availableSlots) {
+            availableSlotsCache[dateString] = data.data.availableSlots;
+            renderTimeSlots(data.data.availableSlots, timeSlotsContainer, noSlotsMessage);
+        } else {
+            throw new Error('Ошибка загрузки времени');
+        }
+    } catch (error) {
+        console.error('Error loading time slots:', error);
+        timeSlotsContainer.innerHTML = '';
+        noSlotsMessage.style.display = 'block';
+        noSlotsMessage.innerHTML = `
+            <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки времени
+        `;
+    }
+}
+
+// Рендер слотов времени
+function renderTimeSlots(availableSlots, container, noSlotsMessage) {
+    container.innerHTML = '';
+    
+    if (!availableSlots || availableSlots.length === 0) {
+        noSlotsMessage.style.display = 'block';
+        return;
     }
     
-    // Показываем все слоты как доступные
-    slots.forEach(slot => {
+    noSlotsMessage.style.display = 'none';
+    
+    availableSlots.forEach(slot => {
         const timeElement = document.createElement('button');
         timeElement.className = 'time-slot available';
         timeElement.type = 'button';
@@ -230,7 +256,7 @@ function generateTimeSlots() {
             selectTime(slot, timeElement);
         });
         
-        timeSlotsContainer.appendChild(timeElement);
+        container.appendChild(timeElement);
     });
 }
 
@@ -244,6 +270,7 @@ function selectTime(time, element) {
     selectedTime = time;
     document.getElementById('selectedTime').value = time;
     hideError(null, 'timeError');
+    updateSubmitButton();
 }
 
 // Настройка обработчиков событий
@@ -254,6 +281,7 @@ function setupEventListeners() {
         if (x) {
             e.target.value = '+7' + (x[2] ? ' (' + x[2] : '') + (x[3] ? ') ' + x[3] : '') + (x[4] ? '-' + x[4] : '') + (x[5] ? '-' + x[5] : '');
         }
+        updateSubmitButton();
     });
 
     // Обработчик отправки формы
@@ -270,20 +298,21 @@ function setupEventListeners() {
 
     // Валидация при изменении полей
     form.querySelectorAll('input, select, textarea').forEach(element => {
-        element.addEventListener('blur', function() {
+        element.addEventListener('input', function() {
             validateField(this);
+            updateSubmitButton();
         });
         
-        element.addEventListener('input', function() {
-            if (this.classList.contains('error')) {
-                validateField(this);
-            }
+        element.addEventListener('blur', function() {
+            validateField(this);
+            updateSubmitButton();
         });
     });
 
     // Обработчик для кнопки согласия
     document.getElementById('agree').addEventListener('change', function() {
         validateField(this);
+        updateSubmitButton();
     });
 }
 
@@ -333,6 +362,29 @@ function validateField(field) {
             }
             break;
     }
+}
+
+// Обновление состояния кнопки отправки
+function updateSubmitButton() {
+    const isFormValid = validateFormSilent();
+    submitButton.disabled = !isFormValid;
+}
+
+// Тихая валидация без показа ошибок
+function validateFormSilent() {
+    const name = document.getElementById('name').value.trim();
+    const phone = phoneInput.value.replace(/\D/g, '');
+    const service = document.getElementById('service').value;
+    const carModel = document.getElementById('carModel').value.trim();
+    const agree = document.getElementById('agree').checked;
+    
+    return name && 
+           phone.length === 11 && 
+           service && 
+           carModel && 
+           agree && 
+           selectedDate && 
+           selectedTime;
 }
 
 // Валидация формы
@@ -403,20 +455,20 @@ async function submitForm() {
             }
         });
         
-        console.log("📨 Ответ от сервера:", response.status);
-        
         const data = await response.json();
         console.log("📊 Данные ответа:", data);
         
         if (data.result === 'success') {
             showSuccessMessage(formData);
             resetForm();
+            // Очищаем кэш, так как добавили новую запись
+            availableSlotsCache = {};
         } else {
             throw new Error(data.message || 'Неизвестная ошибка');
         }
     } catch (error) {
         console.error('❌ Ошибка при отправке:', error);
-        showGlobalError('Не удалось отправить запись. Пожалуйста, попробуйте еще раз или свяжитесь с нами по телефону.');
+        showGlobalError(error.message);
     } finally {
         hideLoading();
     }
@@ -468,6 +520,8 @@ function resetForm() {
     document.querySelectorAll('.form-control.error').forEach(input => {
         input.classList.remove('error');
     });
+    
+    updateSubmitButton();
 }
 
 // Вспомогательные функции
@@ -499,5 +553,6 @@ function hideLoading() {
     submitButton.disabled = false;
     document.querySelector('.btn-text').style.display = 'inline-block';
     document.querySelector('.btn-loading').style.display = 'none';
+    updateSubmitButton();
 }
 
