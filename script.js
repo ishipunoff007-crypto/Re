@@ -1,5 +1,5 @@
 // Конфигурация для Google Apps Script
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzEc-LM2BRX4Ez-w3leYupVm7XE8Evq9nxsZWOsvkxqKkI1JWg7hUOG7aNHeRbpDw-Q/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwaGl_dtNh4TMs0sEb68DQN3XxMsmfq3Sf2i09djK18yrYSkPkKBowglhUGQIHrwHKlOQ/exec";
 
 // DOM элементы
 const form = document.getElementById('bookingForm');
@@ -623,4 +623,5 @@ document.addEventListener('visibilitychange', function() {
         loadDateAvailability();
     }
 });
+
 
