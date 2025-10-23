@@ -340,7 +340,7 @@ function validateFormSilent() {
            service && 
            carModel && 
            agree && 
-           selectedDate; // Только дата, без времени
+           selectedDate;
 }
 
 // Валидация формы
@@ -397,57 +397,68 @@ async function submitForm() {
     isSubmitting = true;
 
     try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8',
-            },
-            body: JSON.stringify(formData)
-        });
+        const response = await sendPostRequest(GOOGLE_SCRIPT_URL, formData);
+        console.log("📊 Ответ сервера:", response);
         
-        console.log("📨 Статус ответа:", response.status, response.statusText);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const resultText = await response.text();
-        console.log("📊 Ответ сервера (текст):", resultText);
-        
-        let data;
-        try {
-            data = JSON.parse(resultText);
-        } catch (parseError) {
-            console.error("❌ Ошибка парсинга JSON ответа:", parseError);
-            throw new Error('Сервер вернул неверный формат данных');
-        }
-        
-        console.log("📊 Ответ сервера (объект):", data);
-        
-        if (data.result === 'success') {
+        if (response.result === 'success') {
             console.log("✅ Успешная отправка!");
             showSuccessMessage(formData);
             resetForm();
         } else {
-            throw new Error(data.message || 'Неизвестная ошибка сервера');
+            throw new Error(response.message || 'Неизвестная ошибка сервера');
         }
     } catch (error) {
         console.error('❌ Ошибка при отправке:', error);
-        
-        let errorMessage = 'Ошибка при отправке формы';
-        if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Не удалось соединиться с сервером. Проверьте интернет.';
-        } else if (error.message.includes('HTTP error')) {
-            errorMessage = 'Ошибка сервера. Попробуйте позже.';
-        } else {
-            errorMessage = error.message;
-        }
-        
-        showGlobalError(errorMessage);
+        showGlobalError(error.message);
     } finally {
         hideLoading();
         isSubmitting = false;
     }
+}
+
+// Надежная функция отправки POST запроса
+function sendPostRequest(url, data) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        // Используем POST метод
+        xhr.open('POST', url, true);
+        
+        // Устанавливаем заголовки
+        xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+        
+        // Обработчики событий
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        resolve(response);
+                    } catch (e) {
+                        console.error("❌ Ошибка парсинга ответа:", e);
+                        reject(new Error('Неверный формат ответа от сервера'));
+                    }
+                } else {
+                    reject(new Error(`HTTP ошибка! Статус: ${xhr.status}`));
+                }
+            }
+        };
+        
+        xhr.onerror = function() {
+            reject(new Error('Ошибка сети. Проверьте подключение к интернету.'));
+        };
+        
+        xhr.ontimeout = function() {
+            reject(new Error('Таймаут запроса. Сервер не отвечает.'));
+        };
+        
+        // Устанавливаем таймаут 30 секунд
+        xhr.timeout = 30000;
+        
+        // Отправляем данные
+        console.log("📨 Отправляю JSON:", JSON.stringify(data));
+        xhr.send(JSON.stringify(data));
+    });
 }
 
 // Показать сообщение об успехе
@@ -519,7 +530,7 @@ function hideError(input, errorId) {
 // Показать индикатор загрузки
 function showLoading() {
     submitButton.disabled = true;
-    submitButton.innerHTML = '<span class="btn-loading">Отправка...</span>';
+    submitButton.innerHTML = '<span class="btn-loading"><i class="fas fa-spinner fa-spin"></i> Отправка...</span>';
 }
 
 // Скрыть индикатор загрузки
@@ -527,5 +538,4 @@ function hideLoading() {
     updateSubmitButton();
     submitButton.innerHTML = '<span class="btn-text">Записаться</span>';
 }
-
 
