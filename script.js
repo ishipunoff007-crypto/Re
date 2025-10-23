@@ -13,7 +13,6 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let selectedDate = null;
 let selectedTime = null;
-let availableSlotsCache = {};
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
@@ -205,32 +204,30 @@ async function loadAvailableTimeSlots(date) {
     noSlotsMessage.style.display = 'none';
     timeSlotsContainer.innerHTML = `
         <div class="loading" style="text-align: center; padding: 20px; color: #666;">
-            <i class="fas fa-spinner fa-spin"></i> Загрузка доступного времени...
+            <i class="fas fa-spinner fa-spin"></i> Проверяем доступное время...
         </div>
     `;
     
     try {
-        // Проверяем кэш
-        if (availableSlotsCache[dateString]) {
-            renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
-            return;
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`);
+        
+        if (!response.ok) {
+            throw new Error('Ошибка сети');
         }
         
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`);
         const data = await response.json();
         
         if (data.result === 'success' && data.data.availableSlots) {
-            availableSlotsCache[dateString] = data.data.availableSlots;
             renderTimeSlots(data.data.availableSlots, timeSlotsContainer, noSlotsMessage);
         } else {
-            throw new Error('Ошибка загрузки времени');
+            throw new Error(data.message || 'Ошибка загрузки времени');
         }
     } catch (error) {
-        console.error('Error loading time slots:', error);
+        console.error('❌ Ошибка загрузки времени:', error);
         timeSlotsContainer.innerHTML = '';
         noSlotsMessage.style.display = 'block';
         noSlotsMessage.innerHTML = `
-            <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки времени
+            <i class="fas fa-exclamation-triangle"></i> Не удалось загрузить доступное время
         `;
     }
 }
@@ -241,6 +238,9 @@ function renderTimeSlots(availableSlots, container, noSlotsMessage) {
     
     if (!availableSlots || availableSlots.length === 0) {
         noSlotsMessage.style.display = 'block';
+        noSlotsMessage.innerHTML = `
+            <i class="fas fa-calendar-times"></i> На эту дату нет свободного времени
+        `;
         return;
     }
     
@@ -456,13 +456,11 @@ async function submitForm() {
         });
         
         const data = await response.json();
-        console.log("📊 Данные ответа:", data);
+        console.log("📊 Ответ от сервера:", data);
         
         if (data.result === 'success') {
             showSuccessMessage(formData);
             resetForm();
-            // Очищаем кэш, так как добавили новую запись
-            availableSlotsCache = {};
         } else {
             throw new Error(data.message || 'Неизвестная ошибка');
         }
