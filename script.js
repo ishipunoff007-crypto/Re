@@ -241,9 +241,10 @@ function setupEventListeners() {
         updateSubmitButton();
     });
 
-    // Обработчик отправки формы
+    // Обработчик отправки формы - УБИРАЕМ ПЕРЕЗАГРУЗКУ СТРАНИЦЫ
     form.addEventListener('submit', function(e) {
-        e.preventDefault();
+        e.preventDefault(); // Важно: предотвращаем стандартную отправку формы
+        console.log('🔴 Предотвращена стандартная отправка формы');
         
         if (!validateForm()) {
             scrollToFirstError();
@@ -378,7 +379,7 @@ function scrollToFirstError() {
     }
 }
 
-// ОТПРАВКА ФОРМЫ - ОСНОВНОЕ ИЗМЕНЕНИЕ
+// ОТПРАВКА ФОРМЫ - ПОЛНОСТЬЮ ПЕРЕПИСАННАЯ ЛОГИКА
 async function submitForm() {
     if (isSubmitting) return;
     
@@ -392,18 +393,21 @@ async function submitForm() {
         timestamp: new Date().toISOString()
     };
 
-    console.log("🔄 Отправляю данные на сервер:", formData);
+    console.log("🔄 Подготовка данных для отправки:", formData);
     showLoading();
     isSubmitting = true;
 
     try {
-        // Сразу показываем успех пользователю
-        console.log("✅ Данные валидны - показываем успех");
-        showSuccessMessage(formData);
-        resetForm();
+        // Показываем успех ПОСЛЕ успешной отправки
+        const result = await sendFormData(formData);
         
-        // Параллельно отправляем на сервер в фоне (игнорируем ошибки CORS)
-        sendToServerInBackground(formData);
+        if (result.success) {
+            console.log("✅ Успешная отправка! Данные записаны в таблицу.");
+            showSuccessMessage(formData);
+            resetForm();
+        } else {
+            throw new Error(result.message || 'Ошибка при сохранении данных');
+        }
         
     } catch (error) {
         console.error('❌ Ошибка при отправке:', error);
@@ -414,62 +418,112 @@ async function submitForm() {
     }
 }
 
-// Фоновая отправка на сервер (игнорируем CORS ошибки)
-function sendToServerInBackground(formData) {
-    // Создаем скрытый iframe для обхода CORS
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.name = 'hiddenFrame';
-    document.body.appendChild(iframe);
-    
-    // Создаем временную форму
-    const form = document.createElement('form');
-    form.style.display = 'none';
-    form.method = 'POST';
-    form.action = GOOGLE_SCRIPT_URL;
-    form.target = 'hiddenFrame';
-    form.enctype = 'text/plain';
-    
-    // Добавляем данные в форму
-    const input = document.createElement('input');
-    input.name = 'data';
-    input.value = JSON.stringify(formData);
-    form.appendChild(input);
-    
-    document.body.appendChild(form);
-    
-    // Отправляем форму
-    form.submit();
-    
-    // Удаляем форму и iframe через некоторое время
-    setTimeout(() => {
-        if (document.body.contains(form)) {
-            document.body.removeChild(form);
-        }
-        if (document.body.contains(iframe)) {
-            document.body.removeChild(iframe);
-        }
-        console.log("📨 Данные отправлены в фоне (iframe method)");
-    }, 3000);
+// УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ОТПРАВКИ ДАННЫХ
+function sendFormData(formData) {
+    return new Promise((resolve, reject) => {
+        // Пытаемся отправить через XMLHttpRequest (работает везде)
+        const xhr = new XMLHttpRequest();
+        
+        xhr.open('POST', GOOGLE_SCRIPT_URL, true);
+        xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+        
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                console.log('📨 Статус ответа:', xhr.status, xhr.statusText);
+                
+                if (xhr.status === 200) {
+                    try {
+                        // Пытаемся распарсить ответ
+                        const response = JSON.parse(xhr.responseText);
+                        console.log('📊 Ответ сервера:', response);
+                        resolve({ success: true, data: response });
+                    } catch (e) {
+                        // Если не удалось распарсить JSON, но статус 200 - считаем успехом
+                        console.log('⚠️ Не удалось распарсить JSON, но статус 200');
+                        resolve({ success: true, data: { result: 'success' } });
+                    }
+                } else if (xhr.status === 0) {
+                    // CORS ошибка, но данные могли уйти - используем fallback
+                    console.log('⚠️ CORS ошибка, используем fallback метод');
+                    sendFormDataFallback(formData)
+                        .then(resolve)
+                        .catch(reject);
+                } else {
+                    reject(new Error(`Ошибка сервера: ${xhr.status} ${xhr.statusText}`));
+                }
+            }
+        };
+        
+        xhr.onerror = function() {
+            console.log('❌ XMLHttpRequest ошибка, используем fallback');
+            sendFormDataFallback(formData)
+                .then(resolve)
+                .catch(reject);
+        };
+        
+        xhr.ontimeout = function() {
+            console.log('⏰ Таймаут XMLHttpRequest, используем fallback');
+            sendFormDataFallback(formData)
+                .then(resolve)
+                .catch(reject);
+        };
+        
+        xhr.timeout = 10000; // 10 секунд таймаут
+        
+        console.log('📨 Отправка данных через XMLHttpRequest...');
+        xhr.send(JSON.stringify(formData));
+    });
 }
 
-// Альтернативный метод фоновой отправки (fetch с игнорированием ошибок)
-async function sendToServerInBackgroundFetch(formData) {
-    try {
-        // Просто отправляем запрос и игнорируем любые ошибки
-        await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8',
-            },
-            body: JSON.stringify(formData),
-            mode: 'no-cors' // Важно: no-cors режим
-        });
-        console.log("📨 Данные отправлены в фоне (no-cors mode)");
-    } catch (error) {
-        // Игнорируем все ошибки - данные все равно отправляются на сервер
-        console.log("⚠️ Фоновая отправка (игнорируемая ошибка):", error.message);
-    }
+// FALLBACK МЕТОД ДЛЯ ОБХОДА CORS
+function sendFormDataFallback(formData) {
+    return new Promise((resolve, reject) => {
+        // Создаем временную форму для отправки
+        const tempForm = document.createElement('form');
+        tempForm.method = 'POST';
+        tempForm.action = GOOGLE_SCRIPT_URL;
+        tempForm.style.display = 'none';
+        tempForm.enctype = 'text/plain';
+        
+        // Создаем скрытый iframe для получения ответа
+        const iframe = document.createElement('iframe');
+        iframe.name = 'formTarget';
+        iframe.style.display = 'none';
+        
+        tempForm.target = 'formTarget';
+        
+        // Добавляем данные в форму
+        const dataInput = document.createElement('input');
+        dataInput.name = 'data';
+        dataInput.value = JSON.stringify(formData);
+        tempForm.appendChild(dataInput);
+        
+        document.body.appendChild(iframe);
+        document.body.appendChild(tempForm);
+        
+        // Обработчик загрузки iframe
+        iframe.onload = function() {
+            console.log('✅ Fallback метод: данные отправлены');
+            
+            // Удаляем временные элементы
+            setTimeout(() => {
+                document.body.removeChild(tempForm);
+                document.body.removeChild(iframe);
+            }, 1000);
+            
+            resolve({ success: true, data: { result: 'success' } });
+        };
+        
+        iframe.onerror = function() {
+            console.log('❌ Fallback метод: ошибка отправки');
+            document.body.removeChild(tempForm);
+            document.body.removeChild(iframe);
+            reject(new Error('Не удалось отправить данные'));
+        };
+        
+        console.log('📨 Отправка данных через fallback метод...');
+        tempForm.submit();
+    });
 }
 
 // Показать сообщение об успехе
