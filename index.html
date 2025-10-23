@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Автосервис на Панина - профессиональный ремонт автомобилей</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="" crossorigin="anonymous">
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header>
@@ -13,11 +13,11 @@
             <div class="header-content">
                 <h1 class="logo">АВТОСЕРВИС НА ПАНИНА</h1>
                 <p class="tagline">Профессиональный ремонт и обслуживание автомобилей с гарантией качества</p>
-                <div class="floating-elements" aria-hidden="true">
-                    <i class="floating-element fas fa-tools" aria-hidden="true"></i>
-                    <i class="floating-element fas fa-car" aria-hidden="true"></i>
-                    <i class="floating-element fas fa-cogs" aria-hidden="true"></i>
-                    <i class="floating-element fas fa-screwdriver-wrench" aria-hidden="true"></i>
+                <div class="floating-elements">
+                    <i class="floating-element fas fa-tools"></i>
+                    <i class="floating-element fas fa-car"></i>
+                    <i class="floating-element fas fa-cogs"></i>
+                    <i class="floating-element fas fa-screwdriver-wrench"></i>
                 </div>
             </div>
         </div>
@@ -27,103 +27,51 @@
         <div class="container">
             <h2 class="form-title">Записаться на обслуживание</h2>
 
-            <!-- Сообщение о приостановке записи -->
-            <div class="booking-disabled-message" id="bookingDisabledMessage" style="display: none;" role="status" aria-live="polite">
-                <i class="fas fa-pause-circle" aria-hidden="true"></i>
+            <!-- Сообщения -->
+            <div class="booking-disabled-message" id="bookingDisabledMessage" style="display: none;">
+                <i class="fas fa-pause-circle"></i> 
                 <span id="pauseMessageText">Запись временно приостановлена. Приносим извинения за неудобства.</span>
             </div>
 
-            <!-- Сообщение об успехе -->
-            <div class="success-message" id="successMessage" style="display: none;" role="status" aria-live="polite">
-                <i class="fas fa-check-circle" aria-hidden="true"></i>
+            <div class="success-message" id="successMessage" style="display: none;">
+                <i class="fas fa-check-circle"></i> 
                 <span id="successMessageText">Спасибо! Ваша заявка принята. Мы свяжемся с вами в ближайшее время.</span>
             </div>
 
-            <!-- Сообщение об ошибке -->
-            <div class="error-message global-error" id="globalError" style="display: none;" role="alert" aria-live="assertive">
-                <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <div class="error-message global-error" id="globalError" style="display: none;">
+                <i class="fas fa-exclamation-circle"></i> 
                 <span id="errorMessageText">Произошла ошибка. Пожалуйста, попробуйте позже.</span>
             </div>
 
-            <!-- Индикатор загрузки -->
-            <div class="loading-indicator" id="loadingIndicator" style="display: none;" aria-hidden="true">
-                <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Загрузка доступных дат...
+            <div class="loading-indicator" id="loadingIndicator" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i> Загрузка доступных дат...
             </div>
 
-            <!-- Форма записи
-                 data-booking-weeks — число недель вперед, которое читает JS
-                 data-booking-disabled — флаг приостановки (можно менять по API/скрипту)
-            -->
-            <form class="booking-form" id="bookingForm" novalidate data-booking-weeks="4" data-booking-disabled="false">
+            <!-- Форма записи -->
+            <form class="booking-form" id="bookingForm">
                 <div class="form-group">
-                    <label for="name">Ваше имя *</label>
-                    <input type="text" id="name" name="name" class="form-control" placeholder="Введите ваше имя" required autocomplete="name" />
-                    <div class="error-message field-error" id="nameError" aria-hidden="true">Пожалуйста, введите ваше имя</div>
+                    <label for="nameInput">Ваше имя *</label>
+                    <input type="text" id="nameInput" class="form-control" placeholder="Введите ваше имя" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="phone">Номер телефона *</label>
-                    <!-- pattern: простой шаблон для +7XXXXXXXXXX или 8XXXXXXXXXX -->
-                    <input type="tel" id="phone" name="phone" class="form-control" placeholder="+7 (999) 999-99-99" required inputmode="tel" autocomplete="tel" pattern="^(\+?7|8)\s?\(?\d{3}\)?\s?\d{3}[-\s]?\d{2}[-\s]?\d{2}$" />
-                    <div class="error-message field-error" id="phoneError" aria-hidden="true">Пожалуйста, введите корректный номер телефона</div>
+                    <label for="phoneInput">Номер телефона *</label>
+                    <input type="tel" id="phoneInput" class="form-control" placeholder="+7 (999) 999-99-99" required>
                 </div>
-
-                <!-- Блок выбора даты и времени -->
-                <div class="datetime-selection" id="datetimeSelection">
-                    <!-- Блок выбора даты -->
-                    <div class="form-group">
-                        <label>Выберите дату *</label>
-                        <div class="calendar-header" role="navigation" aria-label="Навигация по месяцам">
-                            <button type="button" class="date-nav-btn" id="prevMonthBtn" title="Предыдущий месяц" aria-label="Предыдущий месяц">
-                                <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                            </button>
-                            <div class="month-display" id="monthDisplay" aria-live="polite">
-                                <!-- Месяц и год будут обновляться через JS -->
-                            </div>
-                            <button type="button" class="date-nav-btn" id="nextMonthBtn" title="Следующий месяц" aria-label="Следующий месяц">
-                                <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                            </button>
-                        </div>
-
-                        <div class="calendar-container" aria-hidden="false">
-                            <div class="week-days" aria-hidden="true">
-                                <div>Пн</div>
-                                <div>Вт</div>
-                                <div>Ср</div>
-                                <div>Чт</div>
-                                <div>Пт</div>
-                                <div>Сб</div>
-                                <div>Вс</div>
-                            </div>
-                            <div class="calendar-grid" id="calendarGrid">
-                                <!-- Календарь будет генерироваться через JavaScript -->
-                            </div>
-                        </div>
-                        <div class="error-message field-error" id="dateError" aria-hidden="true">Пожалуйста, выберите дату</div>
-                    </div>
-
-                    <!-- Блок выбора времени -->
-                    <div class="form-group time-selection" id="timeSelection" style="display: none;">
-                        <label>Выберите время *</label>
-                        <div class="selected-date-info" id="selectedDateInfo" aria-live="polite">
-                            <!-- Информация о выбранной дате -->
-                        </div>
-                        <div class="time-slots-container">
-                            <div class="time-slots" id="timeSlots" role="list">
-                                <!-- Временные слоты будут загружены через JavaScript -->
-                            </div>
-                        </div>
-                        <div class="error-message field-error" id="timeError" aria-hidden="true">Пожалуйста, выберите время</div>
-                    </div>
-                </div>
-
-                <!-- Скрытые поля для хранения выбранных значений -->
-                <input type="hidden" id="selectedDate" name="selectedDate" />
-                <input type="hidden" id="selectedTime" name="selectedTime" />
 
                 <div class="form-group">
-                    <label for="service">Выберите услугу *</label>
-                    <select id="service" name="service" class="form-control" required autocomplete="off">
+                    <label>Выберите дату *</label>
+                    <input type="date" id="dateInput" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Выберите время *</label>
+                    <select id="timeInput" required></select>
+                </div>
+
+                <div class="form-group">
+                    <label for="serviceInput">Выберите услугу *</label>
+                    <select id="serviceInput" required>
                         <option value="">-- Выберите услугу --</option>
                         <option value="Компьютерная диагностика">Компьютерная диагностика</option>
                         <option value="Шиномонтаж">Шиномонтаж</option>
@@ -133,45 +81,32 @@
                         <option value="Эндоскопия">Эндоскопия</option>
                         <option value="Другое">Другое</option>
                     </select>
-                    <div class="error-message field-error" id="serviceError" aria-hidden="true">Пожалуйста, выберите услугу</div>
                 </div>
 
                 <div class="form-group">
-                    <label for="carModel">Модель автомобиля *</label>
-                    <input type="text" id="carModel" name="carModel" class="form-control" placeholder="Например: Toyota Camry" required autocomplete="off" />
-                    <div class="error-message field-error" id="carModelError" aria-hidden="true">Пожалуйста, укажите модель автомобиля</div>
+                    <label for="carInput">Модель автомобиля *</label>
+                    <input type="text" id="carInput" placeholder="Например: Toyota Camry" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="comments">Комментарий (необязательно)</label>
-                    <textarea id="comments" name="comments" class="form-control" placeholder="Дополнительная информация о вашем автомобиле или проблеме..." rows="3" autocomplete="off"></textarea>
+                    <label for="commentsInput">Комментарий (необязательно)</label>
+                    <textarea id="commentsInput" placeholder="Дополнительная информация..." rows="3"></textarea>
                 </div>
 
                 <div class="checkbox-group">
-                    <input type="checkbox" id="agree" name="agree" required />
+                    <input type="checkbox" id="agree" required>
                     <label for="agree">Я согласен на обработку моих персональных данных *</label>
                 </div>
-                <div class="error-message field-error" id="agreeError" aria-hidden="true">Необходимо ваше согласие</div>
 
-                <button type="submit" class="btn-primary" id="submitBtn" disabled>
-                    <span class="btn-text">Записаться</span>
-                    <span class="btn-loading" style="display: none;">
-                        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Отправка...
-                    </span>
+                <button type="submit" id="submitBtn">
+                    Записаться
                 </button>
             </form>
 
             <div class="contact-buttons">
-                <a href="tel:+79301141692" class="contact-btn btn-call"><i class="fas fa-phone" aria-hidden="true"></i> Позвонить</a>
-                <a href="https://wa.me/79301141692" class="contact-btn btn-whatsapp" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp</a>
-                <a href="https://t.me/servispanina" class="contact-btn btn-telegram" target="_blank" rel="noopener noreferrer"><i class="fab fa-telegram" aria-hidden="true"></i> Telegram</a>
-            </div>
-
-            <!-- Ссылка на админ-панель (малозаметная) -->
-            <div class="admin-link">
-                <a href="admin.html" class="admin-access-link" aria-label="Панель управления">
-                    <i class="fas fa-cog" aria-hidden="true"></i> Панель управления
-                </a>
+                <a href="tel:+79301141692" class="contact-btn btn-call"><i class="fas fa-phone"></i> Позвонить</a>
+                <a href="https://wa.me/79301141692" class="contact-btn btn-whatsapp" target="_blank"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+                <a href="https://t.me/servispanina" class="contact-btn btn-telegram" target="_blank"><i class="fab fa-telegram"></i> Telegram</a>
             </div>
         </div>
     </section>
@@ -179,15 +114,14 @@
     <footer>
         <div class="container">
             <div class="footer-content">
-                <div class="footer-info">
-                    <p><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Адрес: Ярославль. ул. Панина, 3к3</p>
-                    <p><i class="fas fa-clock" aria-hidden="true"></i> Режим работы: Пн-Пт: 9:00-20:00, Сб-Вс: 9:00-20:00</p>
-                    <p><i class="fas fa-phone" aria-hidden="true"></i> Телефон: +7 (930) 114-16-92</p>
-                </div>
+                <p><i class="fas fa-map-marker-alt"></i> Адрес: Ярославль. ул. Панина, 3к3</p>
+                <p><i class="fas fa-clock"></i> Режим работы: Пн-Пт: 9:00-20:00, Сб-Вс: 9:00-20:00</p>
+                <p><i class="fas fa-phone"></i> Телефон: +7 (930) 114-16-92</p>
             </div>
         </div>
     </footer>
 
+    <!-- Подключаем JS -->
     <script src="script.js"></script>
 </body>
 </html>
