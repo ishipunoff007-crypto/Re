@@ -25,21 +25,10 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     hideTimeSelection();
     
-    // Загружаем статические данные вместо API запросов
-    setTimeout(() => {
-        loadStaticData();
-    }, 1000);
+    // Загружаем данные
+    loadBookingStatus();
+    loadDateAvailability();
 });
-
-// Загрузка статических данных (без API вызовов)
-function loadStaticData() {
-    // Временно используем статические данные
-    isBookingActive = true;
-    updateBookingUI();
-    
-    // Показываем все даты как доступные
-    showAllDatesAsAvailable();
-}
 
 // Инициализация календаря
 function initializeCalendar() {
@@ -109,7 +98,6 @@ function renderCalendar() {
     
     calendarGrid.innerHTML = '';
     
-    // Генерируем 42 дня (6 недель)
     for (let i = 0; i < 42; i++) {
         const date = new Date(startDate);
         date.setDate(startDate.getDate() + i);
@@ -137,10 +125,9 @@ function createDayElement(date, today) {
     
     dayElement.innerHTML = `
         <div class="day-number">${date.getDate()}</div>
-        <div class="day-availability" id="availability-${formatDateForStorage(date)}">загрузка...</div>
+        <div class="day-availability" id="availability-${formatDateForStorage(date)}">...</div>
     `;
     
-    // Добавляем обработчик только для доступных дат
     if (isCurrentMonth && !isPast && isFourWeeksLimit) {
         dayElement.addEventListener('click', function() {
             selectDate(date, dayElement);
@@ -158,12 +145,54 @@ function isWithinFourWeeks(date) {
     today.setHours(0, 0, 0, 0);
     const fourWeeksLater = new Date(today);
     fourWeeksLater.setDate(today.getDate() + 28);
-    
     return date >= today && date <= fourWeeksLater;
 }
 
-// Показать все даты как доступные (при ошибке загрузки)
-function showAllDatesAsAvailable() {
+// Загрузка доступности дат
+async function loadDateAvailability() {
+    const today = new Date();
+    const fourWeeksLater = new Date();
+    fourWeeksLater.setDate(today.getDate() + 28);
+    
+    try {
+        const response = await fetchWithRetry(
+            `${GOOGLE_SCRIPT_URL}?action=getDateAvailability&startDate=${formatDateForStorage(today)}&endDate=${formatDateForStorage(fourWeeksLater)}`
+        );
+        
+        if (!response.ok) throw new Error('Network error');
+        
+        const data = await response.json();
+        
+        if (data.result === 'success' && data.dateAvailability) {
+            updateDateAvailabilityDisplay(data.dateAvailability);
+        } else {
+            throw new Error('Invalid response');
+        }
+    } catch (error) {
+        console.log('Ошибка загрузки доступности дат:', error);
+        showDemoDateAvailability();
+    }
+}
+
+// Обновление отображения доступности дат
+function updateDateAvailabilityDisplay(dateAvailability) {
+    Object.keys(dateAvailability).forEach(dateStr => {
+        const availabilityElement = document.getElementById(`availability-${dateStr}`);
+        if (availabilityElement) {
+            const slots = dateAvailability[dateStr];
+            if (slots > 0) {
+                availabilityElement.textContent = `${slots} слотов`;
+                availabilityElement.style.color = 'var(--success)';
+            } else {
+                availabilityElement.textContent = 'нет мест';
+                availabilityElement.style.color = 'var(--danger)';
+            }
+        }
+    });
+}
+
+// Демо-данные для календаря (при ошибке)
+function showDemoDateAvailability() {
     const today = new Date();
     const fourWeeksLater = new Date();
     fourWeeksLater.setDate(today.getDate() + 28);
@@ -171,17 +200,22 @@ function showAllDatesAsAvailable() {
     for (let date = new Date(today); date <= fourWeeksLater; date.setDate(date.getDate() + 1)) {
         const availabilityElement = document.getElementById(`availability-${formatDateForStorage(date)}`);
         if (availabilityElement) {
-            // Генерируем случайное количество слотов для демонстрации
-            const randomSlots = Math.floor(Math.random() * 8) + 3;
-            availabilityElement.textContent = `${randomSlots} слотов`;
-            availabilityElement.style.color = 'var(--success)';
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            const slots = isWeekend ? 0 : Math.floor(Math.random() * 10) + 5;
+            
+            if (slots > 0) {
+                availabilityElement.textContent = `${slots} слотов`;
+                availabilityElement.style.color = 'var(--success)';
+            } else {
+                availabilityElement.textContent = 'нет мест';
+                availabilityElement.style.color = 'var(--danger)';
+            }
         }
     }
 }
 
 // Выбор даты
-function selectDate(date, element) {
-    // Сбрасываем предыдущий выбор
+async function selectDate(date, element) {
     document.querySelectorAll('.calendar-day').forEach(el => {
         el.classList.remove('selected');
     });
@@ -191,7 +225,7 @@ function selectDate(date, element) {
     document.getElementById('selectedDate').value = formatDateForStorage(date);
     
     showTimeSelection();
-    loadAvailableTimeSlots(date);
+    await loadAvailableTimeSlots(date);
     hideError(null, 'dateError');
 }
 
@@ -223,11 +257,11 @@ function hideTimeSelection() {
     });
 }
 
-// Загрузка доступных слотов времени (статическая версия)
-function loadAvailableTimeSlots(date) {
+// Загрузка доступных слотов времени
+async function loadAvailableTimeSlots(date) {
     const timeSlotsContainer = document.getElementById('timeSlots');
+    const dateString = formatDateForStorage(date);
     
-    // Показываем индикатор загрузки
     timeSlotsContainer.innerHTML = `
         <div style="text-align: center; padding: 30px; color: #666;">
             <i class="fas fa-spinner fa-spin"></i><br>
@@ -235,27 +269,42 @@ function loadAvailableTimeSlots(date) {
         </div>
     `;
     
-    // Имитируем загрузку
-    setTimeout(() => {
-        // Статические временные слоты для демонстрации
-        const staticSlots = generateStaticTimeSlots();
-        renderTimeSlots(staticSlots, timeSlotsContainer);
-    }, 1000);
+    try {
+        // Проверяем кэш
+        if (availableSlotsCache[dateString]) {
+            renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer);
+            return;
+        }
+        
+        const response = await fetchWithRetry(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`);
+        
+        if (!response.ok) throw new Error('Network error');
+        
+        const data = await response.json();
+        
+        if (data.result === 'success' && data.availableSlots) {
+            availableSlotsCache[dateString] = data.availableSlots;
+            renderTimeSlots(data.availableSlots, timeSlotsContainer);
+        } else {
+            throw new Error('No slots data');
+        }
+    } catch (error) {
+        console.log('Ошибка загрузки времени:', error);
+        showDemoTimeSlots(timeSlotsContainer);
+    }
 }
 
-// Генерация статических временных слотов
-function generateStaticTimeSlots() {
-    const slots = [];
+// Демо-временные слоты (при ошибке)
+function showDemoTimeSlots(container) {
+    const demoSlots = [];
     for (let hour = 9; hour <= 19; hour++) {
         for (let minute = 0; minute < 60; minute += 30) {
-            const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            // Случайным образом делаем некоторые слоты недоступными
             if (Math.random() > 0.3) { // 70% слотов доступны
-                slots.push(timeString);
+                demoSlots.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
             }
         }
     }
-    return slots;
+    renderTimeSlots(demoSlots.length > 0 ? demoSlots : ['10:00', '11:00', '14:00', '15:30', '17:00'], container);
 }
 
 // Рендер слотов времени
@@ -313,7 +362,7 @@ function setupEventListeners() {
         e.preventDefault();
         
         if (!isBookingActive) {
-            showGlobalError('Запись временно приостановлена. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону.');
+            showGlobalError('Запись временно приостановлена');
             return;
         }
         
@@ -330,15 +379,8 @@ function setupEventListeners() {
         element.addEventListener('blur', function() {
             validateField(this);
         });
-        
-        element.addEventListener('input', function() {
-            if (this.classList.contains('error')) {
-                validateField(this);
-            }
-        });
     });
 
-    // Обработчик для кнопки согласия
     document.getElementById('agree').addEventListener('change', function() {
         validateField(this);
     });
@@ -350,45 +392,46 @@ function validateField(field) {
     
     switch (fieldId) {
         case 'name':
-            if (!field.value.trim()) {
-                showError(field, 'nameError');
-            } else {
-                hideError(field, 'nameError');
-            }
+            if (!field.value.trim()) showError(field, 'nameError');
+            else hideError(field, 'nameError');
             break;
-            
         case 'phone':
             const phoneDigits = field.value.replace(/\D/g,'');
-            if (phoneDigits.length !== 11) {
-                showError(field, 'phoneError');
-            } else {
-                hideError(field, 'phoneError');
-            }
+            if (phoneDigits.length !== 11) showError(field, 'phoneError');
+            else hideError(field, 'phoneError');
             break;
-            
         case 'service':
-            if (!field.value) {
-                showError(field, 'serviceError');
-            } else {
-                hideError(field, 'serviceError');
-            }
+            if (!field.value) showError(field, 'serviceError');
+            else hideError(field, 'serviceError');
             break;
-            
         case 'carModel':
-            if (!field.value.trim()) {
-                showError(field, 'carModelError');
-            } else {
-                hideError(field, 'carModelError');
-            }
+            if (!field.value.trim()) showError(field, 'carModelError');
+            else hideError(field, 'carModelError');
             break;
-            
         case 'agree':
-            if (!field.checked) {
-                document.getElementById('agreeError').style.display = 'block';
-            } else {
-                document.getElementById('agreeError').style.display = 'none';
-            }
+            if (!field.checked) document.getElementById('agreeError').style.display = 'block');
+            else document.getElementById('agreeError').style.display = 'none';
             break;
+    }
+}
+
+// Загрузка статуса записи
+async function loadBookingStatus() {
+    try {
+        const response = await fetchWithRetry(`${GOOGLE_SCRIPT_URL}?action=getBookingStatus`);
+        
+        if (!response.ok) throw new Error('Network error');
+        
+        const data = await response.json();
+        
+        if (data.result === 'success') {
+            isBookingActive = data.isActive;
+            updateBookingUI();
+        }
+    } catch (error) {
+        console.log('Ошибка загрузки статуса:', error);
+        isBookingActive = true;
+        updateBookingUI();
     }
 }
 
@@ -407,19 +450,16 @@ function updateBookingUI() {
 function validateForm() {
     let isValid = true;
     
-    // Валидация всех полей
     validateField(document.getElementById('name'));
     validateField(document.getElementById('phone'));
     validateField(document.getElementById('service'));
     validateField(document.getElementById('carModel'));
     validateField(document.getElementById('agree'));
 
-    // Проверяем ошибки
     if (document.querySelector('.field-error[style*="display: block"]')) {
         isValid = false;
     }
 
-    // Валидация даты
     if (!selectedDate) {
         document.getElementById('dateError').style.display = 'block';
         isValid = false;
@@ -427,7 +467,6 @@ function validateForm() {
         document.getElementById('dateError').style.display = 'none';
     }
 
-    // Валидация времени
     if (!selectedTime) {
         document.getElementById('timeError').style.display = 'block';
         isValid = false;
@@ -440,14 +479,14 @@ function validateForm() {
 
 // Прокрутка к первой ошибке
 function scrollToFirstError() {
-    const firstError = document.querySelector('.field-error[style*="display: block"], .error-message[style*="display: block"]');
+    const firstError = document.querySelector('.field-error[style*="display: block"]');
     if (firstError) {
         firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
-// Отправка формы (демо-версия)
-function submitForm() {
+// Отправка формы
+async function submitForm() {
     const formData = {
         name: document.getElementById('name').value.trim(),
         phone: phoneInput.value,
@@ -461,16 +500,27 @@ function submitForm() {
 
     showLoading();
 
-    // Имитируем отправку
-    setTimeout(() => {
-        showSuccessMessage(formData);
-        resetForm();
+    try {
+        const response = await fetchWithRetry(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.result === 'success') {
+            showSuccessMessage(formData);
+            resetForm();
+            availableSlotsCache = {};
+        } else {
+            throw new Error(data.message || 'Ошибка сервера');
+        }
+    } catch (error) {
+        console.error('Ошибка при отправке:', error);
+        showGlobalError('Не удалось отправить запись. Пожалуйста, попробуйте еще раз или свяжитесь с нами по телефону.');
+    } finally {
         hideLoading();
-        
-        // В реальном приложении здесь будет fetch запрос
-        console.log('Демо-отправка формы:', formData);
-        
-    }, 2000);
+    }
 }
 
 // Показать сообщение об успехе
@@ -478,7 +528,6 @@ function showSuccessMessage(formData) {
     successMessage.style.display = 'block';
     successMessage.scrollIntoView({ behavior: 'smooth' });
     
-    // Обновляем текст сообщения
     const messageText = document.getElementById('successMessageText');
     messageText.textContent = `Спасибо, ${formData.name}! Ваша запись на ${formData.date} в ${formData.time} принята. Мы свяжемся с вами для подтверждения.`;
     
@@ -512,7 +561,6 @@ function resetForm() {
     hideTimeSelection();
     renderCalendar();
     
-    // Скрываем все ошибки
     document.querySelectorAll('.field-error').forEach(error => {
         error.style.display = 'none';
     });
@@ -522,31 +570,56 @@ function resetForm() {
     });
 }
 
+// Улучшенная функция fetch с повторными попытками
+async function fetchWithRetry(url, options = {}, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8',
+                    ...options.headers
+                }
+            });
+            
+            if (response.ok) return response;
+            
+            // Если ответ не OK, пробуем еще раз
+            if (i < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                continue;
+            }
+            
+            throw new Error(`HTTP error! status: ${response.status}`);
+            
+        } catch (error) {
+            if (i === retries - 1) throw error;
+            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+        }
+    }
+}
+
 // Вспомогательные функции
 function formatDateForStorage(date) {
     return date.toISOString().split('T')[0];
 }
 
-// Показать ошибку
 function showError(input, errorId) {
     if (input) input.classList.add('error');
     document.getElementById(errorId).style.display = 'block';
 }
 
-// Скрыть ошибку
 function hideError(input, errorId) {
     if (input) input.classList.remove('error');
     document.getElementById(errorId).style.display = 'none';
 }
 
-// Показать индикатор загрузки
 function showLoading() {
     submitButton.disabled = true;
     document.querySelector('.btn-text').style.display = 'none';
     document.querySelector('.btn-loading').style.display = 'inline-block';
 }
 
-// Скрыть индикатор загрузки
 function hideLoading() {
     submitButton.disabled = false;
     document.querySelector('.btn-text').style.display = 'inline-block';
