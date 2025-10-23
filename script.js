@@ -1,120 +1,112 @@
-// ======= CONFIG =======
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzc5RyRZefzGEWq_GCg2QM6Bh0uZYvsisptM2hEtQnrKpvn3GFdgbSiN4vXLlzRQaXC/exec";
+// Вставь сюда URL своего Google Apps Script
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzc5RyRZefzGEWq_GCg2QM6Bh0uZYvsisptM2hEtQnrKpvn3GFdgbSiN4vXLlzRQaXC/exec";
 
-// ======= UTILS =======
-async function fetchJSON(url, options = {}) {
+const calendarGrid = document.getElementById('calendarGrid');
+const monthDisplay = document.getElementById('monthDisplay');
+const prevMonthBtn = document.getElementById('prevMonthBtn');
+const nextMonthBtn = document.getElementById('nextMonthBtn');
+const timeInput = document.getElementById('timeInput');
+const bookingForm = document.getElementById('bookingForm');
+const successMessage = document.getElementById('successMessage');
+const globalError = document.getElementById('globalError');
+const bookingDisabledMessage = document.getElementById('bookingDisabledMessage');
+
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+let selectedDate = null;
+
+// Проверка статуса записи
+async function checkBookingStatus() {
     try {
-        const res = await fetch(url, options);
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return await res.json();
+        const res = await fetch(`${SCRIPT_URL}?action=getBookingStatus`);
+        const data = await res.json();
+        if (!data.isActive) bookingDisabledMessage.style.display = 'block';
+        else bookingDisabledMessage.style.display = 'none';
     } catch (err) {
-        console.error("Fetch error:", err);
-        return null;
+        console.error('Ошибка проверки статуса:', err);
+        bookingDisabledMessage.style.display = 'none';
     }
 }
 
-// ======= INIT =======
-document.addEventListener("DOMContentLoaded", () => {
-    const form = document.getElementById("bookingForm");
-    const dateInput = document.getElementById("dateInput");
-    const timeSelect = document.getElementById("timeInput");
+// Генерация календаря
+function renderCalendar(month, year) {
+    calendarGrid.innerHTML = '';
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Проверка и установка min для даты
-    if (dateInput) {
-        const today = new Date().toISOString().split('T')[0];
-        dateInput.min = today;
+    monthDisplay.textContent = `${year}-${(month + 1).toString().padStart(2,'0')}`;
 
-        // Обработчик изменения даты для обновления слотов
-        dateInput.addEventListener("change", async () => {
-            const selectedDate = dateInput.value;
-            if (!selectedDate) return;
-
-            const data = await fetchJSON(`${WEB_APP_URL}?action=getAvailableSlots&date=${selectedDate}`);
-            if (!data || data.result !== "success") {
-                console.error("Ошибка получения слотов:", data);
-                return;
-            }
-
-            // Очистка и генерация новых слотов
-            if (timeSelect) {
-                timeSelect.innerHTML = "";
-                data.availableSlots.forEach(slot => {
-                    const option = document.createElement("option");
-                    option.value = slot;
-                    option.textContent = slot;
-                    timeSelect.appendChild(option);
-                });
-
-                if (data.availableSlots.length === 0) {
-                    const option = document.createElement("option");
-                    option.value = "";
-                    option.textContent = "Нет доступных слотов";
-                    timeSelect.appendChild(option);
-                }
-            }
-        });
+    const offset = (firstDay === 0 ? 6 : firstDay - 1);
+    for(let i=0; i<offset; i++){
+        const empty = document.createElement('div'); empty.classList.add('calendar-cell','empty');
+        calendarGrid.appendChild(empty);
     }
 
-    // Обработчик формы
-    if (form) {
-        form.addEventListener("submit", async (e) => {
-            e.preventDefault();
+    for(let day=1; day<=daysInMonth; day++){
+        const cell = document.createElement('div');
+        cell.classList.add('calendar-cell');
+        const dateStr = `${year}-${(month+1).toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}`;
+        cell.textContent = day;
 
-            const formData = {
-                action: "newBooking",
-                name: document.getElementById("nameInput")?.value || "",
-                phone: document.getElementById("phoneInput")?.value || "",
-                date: dateInput?.value || "",
-                time: timeSelect?.value || "",
-                service: document.getElementById("serviceInput")?.value || "",
-                carModel: document.getElementById("carInput")?.value || "",
-                comments: document.getElementById("commentsInput")?.value || ""
-            };
+        const todayStr = new Date().toISOString().split('T')[0];
+        if(dateStr < todayStr) cell.classList.add('disabled');
 
-            // Проверка обязательных полей
-            if (!formData.name || !formData.phone || !formData.date || !formData.time || !formData.service || !formData.carModel) {
-                alert("Пожалуйста, заполните все обязательные поля!");
-                return;
-            }
+        cell.addEventListener('click', () => {
+            if(cell.classList.contains('disabled')) return;
+            document.querySelectorAll('.calendar-cell.selected').forEach(c => c.classList.remove('selected'));
+            cell.classList.add('selected');
+            selectedDate = dateStr;
+            loadAvailableTimes(selectedDate);
+        });
 
-            const response = await fetchJSON(WEB_APP_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(formData)
+        calendarGrid.appendChild(cell);
+    }
+}
+
+// Переключение месяцев
+prevMonthBtn.addEventListener('click', ()=>{ currentMonth--; if(currentMonth<0){currentMonth=11;currentYear--;} renderCalendar(currentMonth,currentYear); });
+nextMonthBtn.addEventListener('click', ()=>{ currentMonth++; if(currentMonth>11){currentMonth=0;currentYear++;} renderCalendar(currentMonth,currentYear); });
+
+// Загрузка доступных слотов времени
+async function loadAvailableTimes(dateStr){
+    timeInput.innerHTML = '';
+    try{
+        const res = await fetch(`${SCRIPT_URL}?action=getAvailableSlots&date=${dateStr}`);
+        const data = await res.json();
+        if(data.availableSlots.length > 0){
+            data.availableSlots.forEach(slot => {
+                const opt = document.createElement('option'); opt.value=slot; opt.text=slot;
+                timeInput.appendChild(opt);
             });
+        } else {
+            const opt = document.createElement('option'); opt.text='Нет доступных слотов'; opt.disabled=true;
+            timeInput.appendChild(opt);
+        }
+    } catch(err){ console.error('Ошибка загрузки слотов:', err); }
+}
 
-            if (!response) {
-                alert("Ошибка соединения с сервером.");
-                return;
-            }
-
-            if (response.result === "success") {
-                alert(response.message || "Запись успешно добавлена!");
-                form.reset();
-                // Обновляем слоты после записи
-                dateInput.dispatchEvent(new Event("change"));
-            } else {
-                alert(response.message || "Ошибка при добавлении записи");
-            }
-        });
-    }
-
-    // Проверка статуса записи
-    checkBookingStatus();
+// Отправка формы
+bookingForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    if(!selectedDate){ alert('Выберите дату'); return; }
+    const formData = {
+        action: 'newBooking',
+        name: document.getElementById('nameInput').value,
+        phone: document.getElementById('phoneInput').value,
+        date: selectedDate,
+        time: timeInput.value,
+        service: document.getElementById('serviceInput').value,
+        carModel: document.getElementById('carInput').value,
+        comments: document.getElementById('commentsInput').value
+    };
+    try{
+        const res = await fetch(SCRIPT_URL, { method:'POST', body: JSON.stringify(formData) });
+        const data = await res.json();
+        if(data.result==='success'){ successMessage.style.display='block'; globalError.style.display='none'; bookingForm.reset(); renderCalendar(currentMonth,currentYear); timeInput.innerHTML=''; selectedDate=null;}
+        else { globalError.textContent=data.message; globalError.style.display='block'; successMessage.style.display='none'; }
+    } catch(err){ console.error(err); globalError.style.display='block'; successMessage.style.display='none'; }
 });
 
-// ======= CHECK STATUS =======
-async function checkBookingStatus() {
-    const statusData = await fetchJSON(`${WEB_APP_URL}?action=getBookingStatus`);
-    if (!statusData || statusData.result !== "success") {
-        console.warn("Не удалось получить статус записи");
-        return;
-    }
-
-    if (!statusData.isActive) {
-        alert("Запись временно приостановлена. Пожалуйста, попробуйте позже.");
-        const form = document.getElementById("bookingForm");
-        if (form) form.querySelectorAll("input, select, button, textarea").forEach(el => el.disabled = true);
-    }
-}
-
+// Инициализация
+renderCalendar(currentMonth,currentYear);
+checkBookingStatus();
