@@ -1,129 +1,120 @@
-// ======== Настройки ========
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzc5RyRZefzGEWq_GCg2QM6Bh0uZYvsisptM2hEtQnrKpvn3GFdgbSiN4vXLlzRQaXC/exec"; // <-- вставь URL опубликованного Apps Script
-const MAX_WEEKS = 4;
+// ======= CONFIG =======
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzc5RyRZefzGEWq_GCg2QM6Bh0uZYvsisptM2hEtQnrKpvn3GFdgbSiN4vXLlzRQaXC/exec";
 
-// ======== Элементы DOM ========
-const bookingForm = document.getElementById("booking-form");
-const dateInput = document.getElementById("date");
-const timeSelect = document.getElementById("time");
-const statusMessage = document.getElementById("status-message");
-const bookingContainer = document.getElementById("booking-container");
+// ======= UTILS =======
+async function fetchJSON(url, options = {}) {
+    try {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return await res.json();
+    } catch (err) {
+        console.error("Fetch error:", err);
+        return null;
+    }
+}
 
-// ======== Инициализация ========
-document.addEventListener("DOMContentLoaded", async () => {
-  await checkBookingStatus();
-  setupDatePicker();
+// ======= INIT =======
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("bookingForm");
+    const dateInput = document.getElementById("dateInput");
+    const timeSelect = document.getElementById("timeInput");
+
+    // Проверка и установка min для даты
+    if (dateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.min = today;
+
+        // Обработчик изменения даты для обновления слотов
+        dateInput.addEventListener("change", async () => {
+            const selectedDate = dateInput.value;
+            if (!selectedDate) return;
+
+            const data = await fetchJSON(`${WEB_APP_URL}?action=getAvailableSlots&date=${selectedDate}`);
+            if (!data || data.result !== "success") {
+                console.error("Ошибка получения слотов:", data);
+                return;
+            }
+
+            // Очистка и генерация новых слотов
+            if (timeSelect) {
+                timeSelect.innerHTML = "";
+                data.availableSlots.forEach(slot => {
+                    const option = document.createElement("option");
+                    option.value = slot;
+                    option.textContent = slot;
+                    timeSelect.appendChild(option);
+                });
+
+                if (data.availableSlots.length === 0) {
+                    const option = document.createElement("option");
+                    option.value = "";
+                    option.textContent = "Нет доступных слотов";
+                    timeSelect.appendChild(option);
+                }
+            }
+        });
+    }
+
+    // Обработчик формы
+    if (form) {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const formData = {
+                action: "newBooking",
+                name: document.getElementById("nameInput")?.value || "",
+                phone: document.getElementById("phoneInput")?.value || "",
+                date: dateInput?.value || "",
+                time: timeSelect?.value || "",
+                service: document.getElementById("serviceInput")?.value || "",
+                carModel: document.getElementById("carInput")?.value || "",
+                comments: document.getElementById("commentsInput")?.value || ""
+            };
+
+            // Проверка обязательных полей
+            if (!formData.name || !formData.phone || !formData.date || !formData.time || !formData.service || !formData.carModel) {
+                alert("Пожалуйста, заполните все обязательные поля!");
+                return;
+            }
+
+            const response = await fetchJSON(WEB_APP_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response) {
+                alert("Ошибка соединения с сервером.");
+                return;
+            }
+
+            if (response.result === "success") {
+                alert(response.message || "Запись успешно добавлена!");
+                form.reset();
+                // Обновляем слоты после записи
+                dateInput.dispatchEvent(new Event("change"));
+            } else {
+                alert(response.message || "Ошибка при добавлении записи");
+            }
+        });
+    }
+
+    // Проверка статуса записи
+    checkBookingStatus();
 });
 
-// ======== Проверка статуса записи ========
+// ======= CHECK STATUS =======
 async function checkBookingStatus() {
-  try {
-    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getBookingStatus`);
-    const data = await response.json();
-
-    if (!data.isActive) {
-      bookingContainer.classList.add("booking-paused");
-      statusMessage.innerText = "Запись временно приостановлена.";
-    } else {
-      bookingContainer.classList.remove("booking-paused");
-      statusMessage.innerText = "";
+    const statusData = await fetchJSON(`${WEB_APP_URL}?action=getBookingStatus`);
+    if (!statusData || statusData.result !== "success") {
+        console.warn("Не удалось получить статус записи");
+        return;
     }
-  } catch (err) {
-    console.error("Ошибка проверки статуса:", err);
-  }
+
+    if (!statusData.isActive) {
+        alert("Запись временно приостановлена. Пожалуйста, попробуйте позже.");
+        const form = document.getElementById("bookingForm");
+        if (form) form.querySelectorAll("input, select, button, textarea").forEach(el => el.disabled = true);
+    }
 }
 
-// ======== Настройка выбора даты ========
-function setupDatePicker() {
-  const today = new Date();
-  const minDate = today.toISOString().split("T")[0];
-
-  const maxDate = new Date();
-  maxDate.setDate(today.getDate() + MAX_WEEKS * 7);
-  const maxDateStr = maxDate.toISOString().split("T")[0];
-
-  dateInput.min = minDate;
-  dateInput.max = maxDateStr;
-
-  dateInput.addEventListener("change", loadAvailableTimes);
-}
-
-// ======== Загрузка доступных слотов времени ========
-async function loadAvailableTimes() {
-  const selectedDate = dateInput.value;
-  if (!selectedDate) return;
-
-  timeSelect.innerHTML = '<option disabled selected>Загрузка...</option>';
-
-  try {
-    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${selectedDate}`);
-    const data = await response.json();
-
-    timeSelect.innerHTML = "";
-
-    if (data.isDayOff) {
-      timeSelect.innerHTML = '<option disabled>Выходной день</option>';
-      return;
-    }
-
-    if (data.availableSlots.length === 0) {
-      timeSelect.innerHTML = '<option disabled>Нет доступного времени</option>';
-      return;
-    }
-
-    data.availableSlots.forEach(time => {
-      const option = document.createElement("option");
-      option.value = time;
-      option.textContent = time;
-      timeSelect.appendChild(option);
-    });
-
-  } catch (err) {
-    console.error("Ошибка загрузки времени:", err);
-    timeSelect.innerHTML = '<option disabled>Ошибка загрузки</option>';
-  }
-}
-
-// ======== Отправка формы ========
-bookingForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const formData = {
-    name: bookingForm.name.value.trim(),
-    phone: bookingForm.phone.value.trim(),
-    date: bookingForm.date.value,
-    time: bookingForm.time.value,
-    service: bookingForm.service.value,
-    carModel: bookingForm.carModel.value,
-    comments: bookingForm.comments.value.trim(),
-    timestamp: new Date().toISOString()
-  };
-
-  // Проверка обязательных полей
-  if (!formData.name || !formData.phone || !formData.date || !formData.time) {
-    alert("Пожалуйста, заполните все обязательные поля.");
-    return;
-  }
-
-  try {
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData)
-    });
-
-    const result = await response.json();
-
-    if (result.result === "success") {
-      alert(result.message || "Запись успешно создана!");
-      bookingForm.reset();
-      timeSelect.innerHTML = "";
-    } else {
-      alert(result.message || "Ошибка при записи.");
-    }
-
-  } catch (err) {
-    console.error("Ошибка отправки данных:", err);
-    alert("Ошибка соединения с сервером. Попробуйте позже.");
-  }
-});
