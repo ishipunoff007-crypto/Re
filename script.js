@@ -12,13 +12,12 @@ const submitButton = document.getElementById('submitBtn');
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let selectedDate = null;
-let selectedTime = null;
+let isSubmitting = false;
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
     initializeCalendar();
     setupEventListeners();
-    hideTimeSelection();
     updateSubmitButton();
 });
 
@@ -39,7 +38,7 @@ function setupCalendarNavigation() {
         }
         updateMonthNavigation();
         renderCalendar();
-        hideTimeSelection();
+        clearDateSelection();
     });
 
     document.getElementById('nextMonthBtn').addEventListener('click', function() {
@@ -50,7 +49,7 @@ function setupCalendarNavigation() {
         }
         updateMonthNavigation();
         renderCalendar();
-        hideTimeSelection();
+        clearDateSelection();
     });
 }
 
@@ -122,7 +121,7 @@ function createDayElement(date, today) {
     if (isWeekend) dayElement.classList.add('weekend');
     if (!isFourWeeksLimit) dayElement.classList.add('unavailable');
     
-    // Только число, без надписи со слотами
+    // Только число
     dayElement.innerHTML = `<div class="day-number">${date.getDate()}</div>`;
     
     // Добавляем обработчик только для доступных дат
@@ -148,7 +147,7 @@ function isWithinFourWeeks(date) {
 }
 
 // Выбор даты
-async function selectDate(date, element) {
+function selectDate(date, element) {
     document.querySelectorAll('.calendar-day').forEach(el => {
         el.classList.remove('selected');
     });
@@ -157,119 +156,52 @@ async function selectDate(date, element) {
     selectedDate = date;
     document.getElementById('selectedDate').value = formatDateForStorage(date);
     
-    showTimeSelection();
     hideError(null, 'dateError');
-    
-    // Загружаем доступные слоты с сервера
-    await loadAvailableTimeSlots(date);
     updateSubmitButton();
+    
+    // Показываем выбранную дату пользователю
+    showSelectedDateInfo(date);
 }
 
-// Показать выбор времени
-function showTimeSelection() {
-    const timeSelection = document.getElementById('timeSelection');
-    const selectedDateInfo = document.getElementById('selectedDateInfo');
+// Показать информацию о выбранной дате
+function showSelectedDateInfo(date) {
+    // Создаем или находим элемент для отображения выбранной даты
+    let dateInfoElement = document.getElementById('selectedDateInfo');
+    if (!dateInfoElement) {
+        dateInfoElement = document.createElement('div');
+        dateInfoElement.id = 'selectedDateInfo';
+        dateInfoElement.className = 'selected-date-info';
+        document.querySelector('.calendar-container').appendChild(dateInfoElement);
+    }
     
-    const dateString = selectedDate.toLocaleDateString('ru-RU', {
+    const dateString = date.toLocaleDateString('ru-RU', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric'
     });
     
-    selectedDateInfo.textContent = `Выбрана дата: ${dateString}`;
-    timeSelection.style.display = 'block';
-}
-
-// Скрыть выбор времени
-function hideTimeSelection() {
-    const timeSelection = document.getElementById('timeSelection');
-    timeSelection.style.display = 'none';
-    selectedTime = null;
-    document.getElementById('selectedTime').value = '';
-    
-    document.querySelectorAll('.time-slot').forEach(el => {
-        el.classList.remove('selected');
-    });
-}
-
-// Загрузка доступных слотов с сервера
-async function loadAvailableTimeSlots(date) {
-    const timeSlotsContainer = document.getElementById('timeSlots');
-    const noSlotsMessage = document.getElementById('noSlotsMessage');
-    const dateString = formatDateForStorage(date);
-    
-    // Показываем индикатор загрузки
-    timeSlotsContainer.innerHTML = '';
-    noSlotsMessage.style.display = 'none';
-    timeSlotsContainer.innerHTML = `
-        <div class="loading" style="text-align: center; padding: 20px; color: #666;">
-            <i class="fas fa-spinner fa-spin"></i> Проверяем доступное время...
+    dateInfoElement.innerHTML = `
+        <div style="background: #e8f5e8; padding: 10px; border-radius: 5px; margin-top: 10px; text-align: center;">
+            <strong>✓ Выбрана дата:</strong> ${dateString}
         </div>
     `;
-    
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`);
-        
-        if (!response.ok) {
-            throw new Error('Ошибка сети');
-        }
-        
-        const data = await response.json();
-        
-        if (data.result === 'success' && data.data.availableSlots) {
-            renderTimeSlots(data.data.availableSlots, timeSlotsContainer, noSlotsMessage);
-        } else {
-            throw new Error(data.message || 'Ошибка загрузки времени');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка загрузки времени:', error);
-        timeSlotsContainer.innerHTML = '';
-        noSlotsMessage.style.display = 'block';
-        noSlotsMessage.innerHTML = `
-            <i class="fas fa-exclamation-triangle"></i> Не удалось загрузить доступное время
-        `;
-    }
 }
 
-// Рендер слотов времени
-function renderTimeSlots(availableSlots, container, noSlotsMessage) {
-    container.innerHTML = '';
+// Очистка выбора даты
+function clearDateSelection() {
+    selectedDate = null;
+    document.getElementById('selectedDate').value = '';
     
-    if (!availableSlots || availableSlots.length === 0) {
-        noSlotsMessage.style.display = 'block';
-        noSlotsMessage.innerHTML = `
-            <i class="fas fa-calendar-times"></i> На эту дату нет свободного времени
-        `;
-        return;
-    }
-    
-    noSlotsMessage.style.display = 'none';
-    
-    availableSlots.forEach(slot => {
-        const timeElement = document.createElement('button');
-        timeElement.className = 'time-slot available';
-        timeElement.type = 'button';
-        timeElement.textContent = slot;
-        
-        timeElement.addEventListener('click', function() {
-            selectTime(slot, timeElement);
-        });
-        
-        container.appendChild(timeElement);
-    });
-}
-
-// Выбор времени
-function selectTime(time, element) {
-    document.querySelectorAll('.time-slot').forEach(el => {
+    document.querySelectorAll('.calendar-day').forEach(el => {
         el.classList.remove('selected');
     });
     
-    element.classList.add('selected');
-    selectedTime = time;
-    document.getElementById('selectedTime').value = time;
-    hideError(null, 'timeError');
+    const dateInfoElement = document.getElementById('selectedDateInfo');
+    if (dateInfoElement) {
+        dateInfoElement.remove();
+    }
+    
     updateSubmitButton();
 }
 
@@ -277,10 +209,21 @@ function selectTime(time, element) {
 function setupEventListeners() {
     // Маска для телефона
     phoneInput.addEventListener('input', function(e) {
-        const x = e.target.value.replace(/\D/g, '').match(/(\d{0,1})(\d{0,3})(\d{0,3})(\d{0,2})(\d{0,2})/);
-        if (x) {
-            e.target.value = '+7' + (x[2] ? ' (' + x[2] : '') + (x[3] ? ') ' + x[3] : '') + (x[4] ? '-' + x[4] : '') + (x[5] ? '-' + x[5] : '');
+        let value = e.target.value.replace(/\D/g, '');
+        
+        // Если начинается с 7 или 8, убираем
+        if (value.startsWith('7') || value.startsWith('8')) {
+            value = value.substring(1);
         }
+        
+        // Форматирование
+        let formattedValue = '+7';
+        if (value.length > 0) formattedValue += ' (' + value.substring(0, 3);
+        if (value.length > 3) formattedValue += ') ' + value.substring(3, 6);
+        if (value.length > 6) formattedValue += '-' + value.substring(6, 8);
+        if (value.length > 8) formattedValue += '-' + value.substring(8, 10);
+        
+        e.target.value = formattedValue;
         updateSubmitButton();
     });
 
@@ -367,7 +310,7 @@ function validateField(field) {
 // Обновление состояния кнопки отправки
 function updateSubmitButton() {
     const isFormValid = validateFormSilent();
-    submitButton.disabled = !isFormValid;
+    submitButton.disabled = !isFormValid || isSubmitting;
 }
 
 // Тихая валидация без показа ошибок
@@ -383,8 +326,7 @@ function validateFormSilent() {
            service && 
            carModel && 
            agree && 
-           selectedDate && 
-           selectedTime;
+           selectedDate; // Только дата, без времени
 }
 
 // Валидация формы
@@ -411,14 +353,6 @@ function validateForm() {
         document.getElementById('dateError').style.display = 'none';
     }
 
-    // Валидация времени
-    if (!selectedTime) {
-        document.getElementById('timeError').style.display = 'block';
-        isValid = false;
-    } else {
-        document.getElementById('timeError').style.display = 'none';
-    }
-
     return isValid;
 }
 
@@ -432,11 +366,12 @@ function scrollToFirstError() {
 
 // Отправка формы
 async function submitForm() {
+    if (isSubmitting) return;
+    
     const formData = {
         name: document.getElementById('name').value.trim(),
         phone: phoneInput.value,
-        date: document.getElementById('selectedDate').value,
-        time: selectedTime,
+        date: document.getElementById('selectedDate').value, // Только дата
         service: document.getElementById('service').value,
         carModel: document.getElementById('carModel').value.trim(),
         comments: document.getElementById('comments').value.trim(),
@@ -445,30 +380,40 @@ async function submitForm() {
 
     console.log("🔄 Отправляю данные:", formData);
     showLoading();
+    isSubmitting = true;
 
     try {
+        // Важно: используем text/plain для обхода CORS
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify(formData),
             headers: {
-                'Content-Type': 'text/plain;charset=utf-8'
-            }
+                'Content-Type': 'text/plain;charset=utf-8',
+            },
+            body: JSON.stringify(formData)
         });
         
-        const data = await response.json();
-        console.log("📊 Ответ от сервера:", data);
+        const result = await response.text();
+        console.log("📊 Ответ от сервера:", result);
+        
+        let data;
+        try {
+            data = JSON.parse(result);
+        } catch (e) {
+            throw new Error('Неверный формат ответа от сервера');
+        }
         
         if (data.result === 'success') {
             showSuccessMessage(formData);
             resetForm();
         } else {
-            throw new Error(data.message || 'Неизвестная ошибка');
+            throw new Error(data.message || 'Ошибка при сохранении записи');
         }
     } catch (error) {
         console.error('❌ Ошибка при отправке:', error);
         showGlobalError(error.message);
     } finally {
         hideLoading();
+        isSubmitting = false;
     }
 }
 
@@ -478,7 +423,14 @@ function showSuccessMessage(formData) {
     successMessage.scrollIntoView({ behavior: 'smooth' });
     
     const messageText = document.getElementById('successMessageText');
-    messageText.textContent = `Спасибо, ${formData.name}! Ваша запись на ${formData.date} в ${formData.time} принята. Мы свяжемся с вами для подтверждения.`;
+    const dateString = selectedDate.toLocaleDateString('ru-RU', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    
+    messageText.textContent = `Спасибо, ${formData.name}! Ваша запись на ${dateString} принята. Мы свяжемся с вами для подтверждения.`;
     
     setTimeout(() => {
         successMessage.style.display = 'none';
@@ -500,15 +452,7 @@ function showGlobalError(message) {
 // Сброс формы
 function resetForm() {
     form.reset();
-    selectedDate = null;
-    selectedTime = null;
-    
-    document.querySelectorAll('.calendar-day.selected, .time-slot.selected').forEach(el => {
-        el.classList.remove('selected');
-    });
-    
-    hideTimeSelection();
-    renderCalendar();
+    clearDateSelection();
     
     // Скрываем все ошибки
     document.querySelectorAll('.field-error').forEach(error => {
@@ -524,7 +468,7 @@ function resetForm() {
 
 // Вспомогательные функции
 function formatDateForStorage(date) {
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
 // Показать ошибку
@@ -542,15 +486,12 @@ function hideError(input, errorId) {
 // Показать индикатор загрузки
 function showLoading() {
     submitButton.disabled = true;
-    document.querySelector('.btn-text').style.display = 'none';
-    document.querySelector('.btn-loading').style.display = 'inline-block';
+    submitButton.innerHTML = '<span class="btn-loading">Отправка...</span>';
 }
 
 // Скрыть индикатор загрузки
 function hideLoading() {
-    submitButton.disabled = false;
-    document.querySelector('.btn-text').style.display = 'inline-block';
-    document.querySelector('.btn-loading').style.display = 'none';
     updateSubmitButton();
+    submitButton.innerHTML = '<span class="btn-text">Записаться</span>';
 }
 
