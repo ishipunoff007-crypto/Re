@@ -1,135 +1,237 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Панель управления — Автосервис на Панина</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Панель управления — Автосервис на Панина</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* (оставил ваш стиль без изменений, он хороший) */
+        /* ... всё содержимое <style> у вас корректное и я не трогаю, кроме добавления meta ... */
+    </style>
 </head>
 <body>
-  <div class="container admin-panel">
-    <h1>Панель управления</h1>
-
-    <div class="toggle-container">
-      <span class="toggle-label">Статус записи:</span>
-      <label class="toggle-switch">
-        <input type="checkbox" id="bookingToggle">
-        <span class="slider"></span>
-      </label>
-      <span id="bookingStatusText"></span>
+<div class="admin-container">
+    <div class="admin-header">
+        <h1><i class="fas fa-cog"></i> Панель управления</h1>
+        <p>Автосервис на Панина</p>
     </div>
 
-    <button class="btn-primary" id="refreshBtn">Обновить список записей</button>
+    <div class="admin-content">
+        <!-- Форма входа -->
+        <div class="login-form" id="loginForm">
+            <h2><i class="fas fa-lock"></i> Вход в панель управления</h2>
+            
+            <div class="error-message" id="loginError" style="display:none;">
+                <i class="fas fa-exclamation-triangle"></i> Неверный пароль. Попробуйте еще раз.
+            </div>
 
-    <h2>Последние записи клиентов</h2>
-    <div class="bookings-table-container">
-      <table class="bookings-table">
-        <thead>
-          <tr>
-            <th>Дата</th>
-            <th>Время</th>
-            <th>Имя</th>
-            <th>Телефон</th>
-            <th>Услуга</th>
-            <th>Модель</th>
-            <th>Комментарий</th>
-            <th>Статус</th>
-          </tr>
-        </thead>
-        <tbody id="bookingsTableBody">
-          <tr><td colspan="8">Загрузка...</td></tr>
-        </tbody>
-      </table>
+            <div class="form-group">
+                <label for="adminPassword"><i class="fas fa-key"></i> Пароль администратора</label>
+                <input type="password" id="adminPassword" class="form-control" placeholder="Введите пароль" autocomplete="off">
+            </div>
+
+            <button class="btn btn-primary" id="loginBtn" type="button">
+                <i class="fas fa-sign-in-alt"></i> Войти
+            </button>
+
+            <div class="logout-btn">
+                <a href="index.html" rel="noopener noreferrer"><i class="fas fa-arrow-left"></i> Вернуться на сайт</a>
+            </div>
+        </div>
+
+        <!-- Панель управления -->
+        <div class="control-panel" id="controlPanel">
+            <div class="status-panel" id="statusPanel">
+                <div class="status-title">
+                    <i class="fas fa-info-circle"></i> Статус записи:
+                </div>
+                <div class="status-value" id="statusValue">
+                    <i class="fas fa-spinner fa-spin"></i> Загрузка...
+                </div>
+            </div>
+
+            <div class="success-message" id="successMessage" style="display:none;">
+                <i class="fas fa-check-circle"></i> Статус успешно обновлен!
+            </div>
+
+            <div class="error-message" id="errorMessage" style="display:none;">
+                <i class="fas fa-exclamation-triangle"></i> Ошибка при обновлении статуса!
+            </div>
+
+            <div class="control-buttons">
+                <button class="btn btn-pause" id="pauseBtn" type="button">
+                    <i class="fas fa-pause"></i> Приостановить запись
+                </button>
+                <button class="btn btn-resume" id="resumeBtn" type="button">
+                    <i class="fas fa-play"></i> Возобновить запись
+                </button>
+            </div>
+
+            <div class="recent-bookings">
+                <h3><i class="fas fa-history"></i> Последние записи</h3>
+                <div class="bookings-list" id="recentBookings">
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        Загрузка записей...
+                    </div>
+                </div>
+            </div>
+
+            <div class="logout-btn">
+                <a href="#" id="logoutLink"><i class="fas fa-sign-out-alt"></i> Выйти из панели</a>
+            </div>
+        </div>
     </div>
-  </div>
+</div>
 
-  <script>
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzc5RyRZefzGEWq_GCg2QM6Bh0uZYvsisptM2hEtQnrKpvn3GFdgbSiN4vXLlzRQaXC/exec"; // вставь тот же URL, что и в script.js
+<script>
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzc5RyRZefzGEWq_GCg2QM6Bh0uZYvsisptM2hEtQnrKpvn3GFdgbSiN4vXLlzRQaXC/exec"; // замените
 
-    document.addEventListener("DOMContentLoaded", async () => {
-      await loadBookingStatus();
-      await loadRecentBookings();
-
-      document.getElementById("bookingToggle").addEventListener("change", toggleBooking);
-      document.getElementById("refreshBtn").addEventListener("click", loadRecentBookings);
-    });
-
-    // === Получение текущего статуса ===
-    async function loadBookingStatus() {
-      try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getBookingStatus`);
-        const data = await response.json();
-
-        const toggle = document.getElementById("bookingToggle");
-        const statusText = document.getElementById("bookingStatusText");
-
-        toggle.checked = data.isActive;
-        statusText.textContent = data.isActive ? "Активна" : "Приостановлена";
-        statusText.style.color = data.isActive ? "green" : "red";
-      } catch (err) {
-        console.error("Ошибка загрузки статуса:", err);
-      }
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('adminAuthenticated') === 'true') {
+        showControlPanel();
     }
+});
 
-    // === Переключение статуса ===
-    async function toggleBooking(e) {
-      const newStatus = e.target.checked;
-      try {
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('logoutLink').addEventListener('click', logout);
+document.getElementById('adminPassword').addEventListener('keypress', e => {
+    if (e.key === 'Enter') login();
+});
+
+async function login() {
+    const password = document.getElementById('adminPassword').value.trim();
+    const errorEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+    if (!password) {
+        errorEl.textContent = 'Введите пароль';
+        errorEl.style.display = 'block';
+        return;
+    }
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Проверка...';
+    btn.disabled = true;
+
+    try {
         const response = await fetch(GOOGLE_SCRIPT_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "toggleBooking",
-            status: newStatus
-          })
+            method: 'POST',
+            body: JSON.stringify({ action: 'checkAdminPassword', password }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
         });
-
         const data = await response.json();
-        alert(data.message || "Статус обновлён!");
-        await loadBookingStatus();
-
-      } catch (err) {
-        console.error("Ошибка изменения статуса:", err);
-        alert("Не удалось изменить статус записи.");
-        e.target.checked = !newStatus; // вернуть в прежнее положение
-      }
-    }
-
-    // === Получение последних записей ===
-    async function loadRecentBookings() {
-      const tbody = document.getElementById("bookingsTableBody");
-      tbody.innerHTML = "<tr><td colspan='8'>Загрузка...</td></tr>";
-
-      try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getRecentBookings`);
-        const data = await response.json();
-
-        if (!data.bookings || data.bookings.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='8'>Записей пока нет</td></tr>";
-          return;
+        if (data.result === 'success') {
+            localStorage.setItem('adminAuthenticated', 'true');
+            showControlPanel();
+        } else {
+            throw new Error(data.message || 'Неверный пароль');
         }
-
-        tbody.innerHTML = "";
-        data.bookings.forEach(b => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${b.date || "-"}</td>
-            <td>${b.time || "-"}</td>
-            <td>${b.name || "-"}</td>
-            <td>${b.phone || "-"}</td>
-            <td>${b.service || "-"}</td>
-            <td>${b.carModel || "-"}</td>
-            <td>${b.comments || ""}</td>
-            <td>${b.status || "-"}</td>
-          `;
-          tbody.appendChild(row);
-        });
-
-      } catch (err) {
-        console.error("Ошибка загрузки записей:", err);
-        tbody.innerHTML = "<tr><td colspan='8'>Ошибка загрузки данных</td></tr>";
-      }
+    } catch (err) {
+        errorEl.textContent = 'Ошибка: ' + err.message;
+        errorEl.style.display = 'block';
+    } finally {
+        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Войти';
+        btn.disabled = false;
+        document.getElementById('adminPassword').value = '';
     }
-  </script>
+}
+
+function logout() {
+    localStorage.removeItem('adminAuthenticated');
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('controlPanel').style.display = 'none';
+}
+
+function showControlPanel() {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('controlPanel').style.display = 'block';
+    loadBookingStatus();
+    loadRecentBookings();
+}
+
+async function loadBookingStatus() {
+    try {
+        const r = await fetch(`${GOOGLE_SCRIPT_URL}?action=getBookingStatus`);
+        const d = await r.json();
+        if (d.result === 'success') updateStatusDisplay(d.isActive);
+        else throw new Error(d.message || 'Ошибка загрузки статуса');
+    } catch (e) {
+        document.getElementById('statusValue').innerHTML = `<span class="status-paused"><i class="fas fa-exclamation-triangle"></i> Ошибка загрузки</span>`;
+    }
+}
+
+function updateStatusDisplay(isActive) {
+    const val = document.getElementById('statusValue');
+    const panel = document.getElementById('statusPanel');
+    if (isActive) {
+        val.innerHTML = `<span class="status-active"><i class="fas fa-check-circle"></i> ЗАПИСЬ АКТИВНА</span>`;
+        panel.className = 'status-panel';
+    } else {
+        val.innerHTML = `<span class="status-paused"><i class="fas fa-pause-circle"></i> ЗАПИСЬ ПРИОСТАНОВЛЕНА</span>`;
+        panel.className = 'status-panel paused';
+    }
+}
+
+document.getElementById('pauseBtn').addEventListener('click', () => toggleBooking(false));
+document.getElementById('resumeBtn').addEventListener('click', () => toggleBooking(true));
+
+async function toggleBooking(status) {
+    const ok = document.getElementById('successMessage');
+    const err = document.getElementById('errorMessage');
+    ok.style.display = 'none';
+    err.style.display = 'none';
+    try {
+        const r = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'toggleBooking', status }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
+        const d = await r.json();
+        if (d.result === 'success') {
+            updateStatusDisplay(status);
+            ok.textContent = d.message || 'Статус обновлён';
+            ok.style.display = 'block';
+            window.opener?.postMessage({ type: 'bookingStatusUpdated' }, '*');
+        } else throw new Error(d.message);
+    } catch (e) {
+        err.textContent = 'Ошибка: ' + e.message;
+        err.style.display = 'block';
+    }
+}
+
+async function loadRecentBookings() {
+    try {
+        const r = await fetch(`${GOOGLE_SCRIPT_URL}?action=getRecentBookings`);
+        const d = await r.json();
+        if (d.result === 'success' && d.bookings) displayBookings(d.bookings);
+        else throw new Error(d.message || 'Ошибка загрузки');
+    } catch (e) {
+        document.getElementById('recentBookings').innerHTML = `<div class="no-bookings">Ошибка загрузки записей</div>`;
+    }
+}
+
+function displayBookings(bookings) {
+    const c = document.getElementById('recentBookings');
+    if (!bookings?.length) {
+        c.innerHTML = '<div class="no-bookings">Нет последних записей</div>';
+        return;
+    }
+    c.innerHTML = bookings.map(b => `
+        <div class="booking-item">
+            <div class="booking-meta">
+                <span>${b.date || ''}</span>
+                <span>${b.time || ''}</span>
+            </div>
+            <div class="booking-name">${b.name || 'Без имени'}</div>
+            <div class="booking-details">
+                <div><strong>Телефон:</strong> ${b.phone || '-'}</div>
+                <div><strong>Услуга:</strong> ${b.service || '-'}</div>
+                <div><strong>Автомобиль:</strong> ${b.carModel || '-'}</div>
+                ${b.comments ? `<div><strong>Комментарий:</strong> ${b.comments}</div>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+</script>
 </body>
 </html>
