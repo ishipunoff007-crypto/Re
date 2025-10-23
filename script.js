@@ -150,23 +150,25 @@ function isWithinFourWeeks(date) {
     return date >= today && date <= fourWeeksLater;
 }
 
-// Загрузка доступности дат через JSONP
-function loadDateAvailability() {
+// Загрузка доступности дат
+async function loadDateAvailability() {
     const today = new Date();
     const fourWeeksLater = new Date();
     fourWeeksLater.setDate(today.getDate() + 28);
     
-    const url = `${GOOGLE_SCRIPT_URL}?action=getDateAvailability&startDate=${formatDateForStorage(today)}&endDate=${formatDateForStorage(fourWeeksLater)}&callback=handleDateAvailability`;
-    
-    loadJSONP(url);
-}
-
-// Обработчик ответа для доступности дат
-window.handleDateAvailability = function(data) {
-    if (data.result === 'success' && data.dateAvailability) {
-        updateDateAvailabilityDisplay(data.dateAvailability);
+    try {
+        const data = await makeRequest('getDateAvailability', {
+            startDate: formatDateForStorage(today),
+            endDate: formatDateForStorage(fourWeeksLater)
+        });
+        
+        if (data.result === 'success' && data.dateAvailability) {
+            updateDateAvailabilityDisplay(data.dateAvailability);
+        }
+    } catch (error) {
+        console.error('Error loading date availability:', error);
     }
-};
+}
 
 // Обновление отображения доступности дат
 function updateDateAvailabilityDisplay(dateAvailability) {
@@ -186,7 +188,7 @@ function updateDateAvailabilityDisplay(dateAvailability) {
 }
 
 // Выбор даты
-function selectDate(date, element) {
+async function selectDate(date, element) {
     // Сбрасываем предыдущий выбор
     document.querySelectorAll('.calendar-day').forEach(el => {
         el.classList.remove('selected');
@@ -197,7 +199,7 @@ function selectDate(date, element) {
     document.getElementById('selectedDate').value = formatDateForStorage(date);
     
     showTimeSelection();
-    loadAvailableTimeSlots(date);
+    await loadAvailableTimeSlots(date);
     hideError(null, 'dateError');
 }
 
@@ -229,8 +231,8 @@ function hideTimeSelection() {
     });
 }
 
-// Загрузка доступных слотов времени через JSONP
-function loadAvailableTimeSlots(date) {
+// Загрузка доступных слотов времени
+async function loadAvailableTimeSlots(date) {
     const timeSlotsContainer = document.getElementById('timeSlots');
     const noSlotsMessage = document.getElementById('noSlotsMessage');
     const dateString = formatDateForStorage(date);
@@ -244,33 +246,31 @@ function loadAvailableTimeSlots(date) {
         </div>
     `;
     
-    // Проверяем кэш
-    if (availableSlotsCache[dateString]) {
-        renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
-        return;
-    }
-    
-    const url = `${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}&callback=handleTimeSlots`;
-    loadJSONP(url);
-}
-
-// Обработчик ответа для временных слотов
-window.handleTimeSlots = function(data) {
-    const timeSlotsContainer = document.getElementById('timeSlots');
-    const noSlotsMessage = document.getElementById('noSlotsMessage');
-    
-    if (data.result === 'success' && data.availableSlots) {
-        const dateString = document.getElementById('selectedDate').value;
-        availableSlotsCache[dateString] = data.availableSlots;
-        renderTimeSlots(data.availableSlots, timeSlotsContainer, noSlotsMessage);
-    } else {
+    try {
+        // Проверяем кэш
+        if (availableSlotsCache[dateString]) {
+            renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
+            return;
+        }
+        
+        const data = await makeRequest('getAvailableSlots', { date: dateString });
+        
+        if (data.result === 'success' && data.availableSlots) {
+            // Сохраняем в кэш
+            availableSlotsCache[dateString] = data.availableSlots;
+            renderTimeSlots(data.availableSlots, timeSlotsContainer, noSlotsMessage);
+        } else {
+            throw new Error('No available slots data');
+        }
+    } catch (error) {
+        console.error('Error loading time slots:', error);
         timeSlotsContainer.innerHTML = '';
         noSlotsMessage.style.display = 'block';
         noSlotsMessage.innerHTML = `
             <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки времени. Пожалуйста, попробуйте позже.
         `;
     }
-};
+}
 
 // Рендер слотов времени
 function renderTimeSlots(availableSlots, container, noSlotsMessage) {
@@ -403,19 +403,21 @@ function validateField(field) {
     }
 }
 
-// Загрузка статуса записи через JSONP
-function loadBookingStatus() {
-    const url = `${GOOGLE_SCRIPT_URL}?action=getBookingStatus&callback=handleBookingStatus`;
-    loadJSONP(url);
-}
-
-// Обработчик ответа для статуса записи
-window.handleBookingStatus = function(data) {
-    if (data.result === 'success') {
-        isBookingActive = data.isActive;
+// Загрузка статуса записи
+async function loadBookingStatus() {
+    try {
+        const data = await makeRequest('getBookingStatus');
+        
+        if (data.result === 'success') {
+            isBookingActive = data.isActive;
+            updateBookingUI();
+        }
+    } catch (error) {
+        console.error('Error loading booking status:', error);
+        isBookingActive = true;
         updateBookingUI();
     }
-};
+}
 
 // Обновление UI в зависимости от статуса записи
 function updateBookingUI() {
@@ -473,8 +475,8 @@ function scrollToFirstError() {
     }
 }
 
-// Отправка формы через JSONP
-function submitForm() {
+// Отправка формы
+async function submitForm() {
     const formData = {
         name: document.getElementById('name').value.trim(),
         phone: phoneInput.value,
@@ -488,10 +490,8 @@ function submitForm() {
 
     showLoading();
 
-    // Создаем уникальный callback для каждого запроса
-    const callbackName = 'submitCallback_' + Date.now();
-    window[callbackName] = function(data) {
-        delete window[callbackName];
+    try {
+        const data = await makeRequest('', formData, 'POST');
         
         if (data.result === 'success') {
             showSuccessMessage(formData);
@@ -499,29 +499,14 @@ function submitForm() {
             // Очищаем кэш для обновления доступности
             availableSlotsCache = {};
         } else {
-            showGlobalError(data.message || 'Не удалось отправить запись');
+            throw new Error(data.message || 'Неизвестная ошибка');
         }
+    } catch (error) {
+        console.error('Ошибка при отправке:', error);
+        showGlobalError('Не удалось отправить запись. Пожалуйста, попробуйте еще раз или свяжитесь с нами по телефону.');
+    } finally {
         hideLoading();
-    };
-
-    const url = `${GOOGLE_SCRIPT_URL}?callback=${callbackName}`;
-    const script = document.createElement('script');
-    script.src = url;
-    
-    // Для POST запросов используем форму
-    const form = document.createElement('form');
-    form.style.display = 'none';
-    form.method = 'POST';
-    form.action = url;
-    
-    const input = document.createElement('input');
-    input.name = 'payload';
-    input.value = JSON.stringify(formData);
-    form.appendChild(input);
-    
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
+    }
 }
 
 // Показать сообщение об успехе
@@ -573,20 +558,46 @@ function resetForm() {
     });
 }
 
-// JSONP загрузчик
-function loadJSONP(url) {
+// Универсальная функция для запросов к Google Apps Script
+function makeRequest(action, params = {}, method = 'GET') {
     return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = url;
-        script.onerror = reject;
+        const xhr = new XMLHttpRequest();
         
-        // Удаляем скрипт после загрузки
-        script.onload = function() {
-            document.body.removeChild(script);
-            resolve();
+        let url = GOOGLE_SCRIPT_URL;
+        if (method === 'GET' && action) {
+            url += '?action=' + encodeURIComponent(action);
+            for (const key in params) {
+                url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+            }
+        }
+        
+        xhr.open(method, url, true);
+        
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        resolve(data);
+                    } catch (e) {
+                        reject(new Error('Invalid JSON response'));
+                    }
+                } else {
+                    reject(new Error('Request failed with status: ' + xhr.status));
+                }
+            }
         };
         
-        document.body.appendChild(script);
+        xhr.onerror = function() {
+            reject(new Error('Network error'));
+        };
+        
+        if (method === 'POST') {
+            const payload = action ? { action, ...params } : params;
+            xhr.send(JSON.stringify(payload));
+        } else {
+            xhr.send();
+        }
     });
 }
 
