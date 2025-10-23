@@ -64,39 +64,37 @@
                     <div class="error-message field-error" id="phoneError">Пожалуйста, введите корректный номер телефона</div>
                 </div>
 
-                <!-- Блок выбора даты и времени -->
-                <div class="datetime-selection" id="datetimeSelection">
-                    <!-- Блок выбора даты -->
-                    <div class="form-group">
-                        <label>Выберите дату *</label>
-                        <div class="calendar-header">
-                            <button type="button" class="date-nav-btn" id="prevMonthBtn" title="Предыдущий месяц">
-                                <i class="fas fa-chevron-left"></i>
-                            </button>
-                            <div class="month-display" id="monthDisplay">
-                                <!-- Месяц и год будут обновляться через JS -->
-                            </div>
-                            <button type="button" class="date-nav-btn" id="nextMonthBtn" title="Следующий месяц">
-                                <i class="fas fa-chevron-right"></i>
-                            </button>
+                <!-- Блок выбора даты -->
+                <div class="form-group">
+                    <label>Выберите дату *</label>
+                    <div class="calendar-header">
+                        <button type="button" class="date-nav-btn" id="prevMonthBtn" title="Предыдущий месяц">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="month-display" id="monthDisplay">
+                            <!-- Месяц и год будут обновляться через JS -->
                         </div>
-                        
-                        <div class="calendar-container">
-                            <div class="week-days">
-                                <div>Пн</div>
-                                <div>Вт</div>
-                                <div>Ср</div>
-                                <div>Чт</div>
-                                <div>Пт</div>
-                                <div>Сб</div>
-                                <div>Вс</div>
-                            </div>
-                            <div class="calendar-grid" id="calendarGrid">
-                                <!-- Календарь будет генерироваться через JavaScript -->
-                            </div>
-                        </div>
-                        <div class="error-message field-error" id="dateError">Пожалуйста, выберите дату</div>
+                        <button type="button" class="date-nav-btn" id="nextMonthBtn" title="Следующий месяц">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
                     </div>
+                    
+                    <div class="calendar-container">
+                        <div class="week-days">
+                            <div>Пн</div>
+                            <div>Вт</div>
+                            <div>Ср</div>
+                            <div>Чт</div>
+                            <div>Пт</div>
+                            <div>Сб</div>
+                            <div>Вс</div>
+                        </div>
+                        <div class="calendar-grid" id="calendarGrid">
+                            <!-- Календарь будет генерироваться через JavaScript -->
+                        </div>
+                    </div>
+                    <div class="error-message field-error" id="dateError">Пожалуйста, выберите дату</div>
+                </div>
 
                 <div class="form-group">
                     <label for="service">Выберите услугу *</label>
@@ -168,5 +166,6 @@
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
