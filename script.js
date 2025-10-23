@@ -1,5 +1,6 @@
 // Конфигурация для Google Apps Script
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwmWxFdJfbQo6uQhjcP6n8e-0vdiN16z6a3isf7aDzv2woHoKe2bGccgeOpkDwus0q-/exec";
+// ЗАМЕНИТЕ НА ВАШ РЕАЛЬНЫЙ URL Google Apps Script
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzc5RyRZefzGEWq_GCg2QM6Bh0uZYvsisptM2hEtQnrKpvn3GFdgbSiN4vXLlzRQaXC/exec";
 
 // DOM элементы
 const form = document.getElementById('bookingForm');
@@ -20,10 +21,15 @@ let availableSlotsCache = {};
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
+    // Сначала покажем календарь, потом загрузим данные
     initializeCalendar();
-    loadBookingStatus();
     setupEventListeners();
     hideTimeSelection();
+    
+    // Загружаем статус с задержкой чтобы избежать race condition
+    setTimeout(() => {
+        loadBookingStatus();
+    }, 1000);
 });
 
 // Инициализация календаря
@@ -103,8 +109,10 @@ function renderCalendar() {
         calendarGrid.appendChild(dayElement);
     }
     
-    // Загружаем доступность дат
-    loadDateAvailability();
+    // Загружаем доступность дат (не блокируем основной поток)
+    setTimeout(() => {
+        loadDateAvailability();
+    }, 500);
 }
 
 // Создание элемента дня
@@ -125,7 +133,7 @@ function createDayElement(date, today) {
     
     dayElement.innerHTML = `
         <div class="day-number">${date.getDate()}</div>
-        <div class="day-availability" id="availability-${formatDateForStorage(date)}"></div>
+        <div class="day-availability" id="availability-${formatDateForStorage(date)}">...</div>
     `;
     
     // Добавляем обработчик только для доступных дат
@@ -157,14 +165,31 @@ async function loadDateAvailability() {
     fourWeeksLater.setDate(today.getDate() + 28);
     
     try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getDateAvailability&startDate=${formatDateForStorage(today)}&endDate=${formatDateForStorage(fourWeeksLater)}`);
+        // Показываем индикатор загрузки
+        showLoadingIndicator();
+        
+        const response = await fetchWithTimeout(
+            `${GOOGLE_SCRIPT_URL}?action=getDateAvailability&startDate=${formatDateForStorage(today)}&endDate=${formatDateForStorage(fourWeeksLater)}`,
+            { timeout: 10000 }
+        );
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.result === 'success' && data.dateAvailability) {
             updateDateAvailabilityDisplay(data.dateAvailability);
+        } else {
+            throw new Error(data.message || 'Invalid response format');
         }
     } catch (error) {
         console.error('Error loading date availability:', error);
+        // При ошибке показываем все даты как доступные
+        showAllDatesAsAvailable();
+    } finally {
+        hideLoadingIndicator();
     }
 }
 
@@ -183,6 +208,21 @@ function updateDateAvailabilityDisplay(dateAvailability) {
             }
         }
     });
+}
+
+// Показать все даты как доступные (при ошибке загрузки)
+function showAllDatesAsAvailable() {
+    const today = new Date();
+    const fourWeeksLater = new Date();
+    fourWeeksLater.setDate(today.getDate() + 28);
+    
+    for (let date = new Date(today); date <= fourWeeksLater; date.setDate(date.getDate() + 1)) {
+        const availabilityElement = document.getElementById(`availability-${formatDateForStorage(date)}`);
+        if (availabilityElement) {
+            availabilityElement.textContent = 'загрузка...';
+            availabilityElement.style.color = 'var(--gray-medium)';
+        }
+    }
 }
 
 // Выбор даты
@@ -236,8 +276,9 @@ async function loadAvailableTimeSlots(date) {
     
     // Показываем индикатор загрузки
     timeSlotsContainer.innerHTML = `
-        <div class="loading" style="text-align: center; padding: 20px; color: #666;">
-            <i class="fas fa-spinner fa-spin"></i> Загрузка доступного времени...
+        <div style="text-align: center; padding: 30px; color: #666;">
+            <i class="fas fa-spinner fa-spin"></i><br>
+            Загрузка доступного времени...
         </div>
     `;
     
@@ -248,10 +289,13 @@ async function loadAvailableTimeSlots(date) {
             return;
         }
         
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`);
+        const response = await fetchWithTimeout(
+            `${GOOGLE_SCRIPT_URL}?action=getAvailableSlots&date=${dateString}`,
+            { timeout: 10000 }
+        );
         
         if (!response.ok) {
-            throw new Error('Network error');
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
@@ -261,13 +305,15 @@ async function loadAvailableTimeSlots(date) {
             availableSlotsCache[dateString] = data.availableSlots;
             renderTimeSlots(data.availableSlots, timeSlotsContainer);
         } else {
-            throw new Error('No available slots data');
+            throw new Error(data.message || 'No available slots data');
         }
     } catch (error) {
         console.error('Error loading time slots:', error);
         timeSlotsContainer.innerHTML = `
-            <div class="error-message" style="text-align: center; padding: 20px;">
-                <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки времени. Пожалуйста, попробуйте позже.
+            <div style="text-align: center; padding: 30px; color: #dc3545;">
+                <i class="fas fa-exclamation-triangle"></i><br>
+                Ошибка загрузки времени.<br>
+                <small>Пожалуйста, попробуйте выбрать другую дату или обновите страницу.</small>
             </div>
         `;
     }
@@ -277,8 +323,9 @@ async function loadAvailableTimeSlots(date) {
 function renderTimeSlots(availableSlots, container) {
     if (!availableSlots || availableSlots.length === 0) {
         container.innerHTML = `
-            <div class="no-slots" style="text-align: center; padding: 20px; color: #666;">
-                <i class="fas fa-calendar-times"></i> На выбранную дату нет свободного времени
+            <div style="text-align: center; padding: 30px; color: #666;">
+                <i class="fas fa-calendar-times"></i><br>
+                На выбранную дату нет свободного времени
             </div>
         `;
         return;
@@ -409,15 +456,26 @@ function validateField(field) {
 // Загрузка статуса записи
 async function loadBookingStatus() {
     try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getBookingStatus`);
+        const response = await fetchWithTimeout(
+            `${GOOGLE_SCRIPT_URL}?action=getBookingStatus`,
+            { timeout: 5000 }
+        );
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.result === 'success') {
             isBookingActive = data.isActive;
             updateBookingUI();
+        } else {
+            throw new Error(data.message || 'Invalid response');
         }
     } catch (error) {
         console.error('Error loading booking status:', error);
+        // При ошибке считаем запись активной
         isBookingActive = true;
         updateBookingUI();
     }
@@ -427,11 +485,9 @@ async function loadBookingStatus() {
 function updateBookingUI() {
     if (isBookingActive) {
         bookingDisabledMessage.style.display = 'none';
-        form.style.display = 'block';
         submitButton.disabled = false;
     } else {
         bookingDisabledMessage.style.display = 'block';
-        form.style.display = 'block'; // Оставляем форму видимой, но блокируем отправку
         submitButton.disabled = true;
     }
 }
@@ -495,12 +551,13 @@ async function submitForm() {
     showLoading();
 
     try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
+        const response = await fetchWithTimeout(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify(formData),
             headers: {
                 'Content-Type': 'text/plain;charset=utf-8'
-            }
+            },
+            timeout: 10000
         });
         
         const data = await response.json();
@@ -599,6 +656,41 @@ function hideLoading() {
     submitButton.disabled = false;
     document.querySelector('.btn-text').style.display = 'inline-block';
     document.querySelector('.btn-loading').style.display = 'none';
+}
+
+// Показать индикатор загрузки для календаря
+function showLoadingIndicator() {
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+    }
+}
+
+// Скрыть индикатор загрузки для календаря
+function hideLoadingIndicator() {
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+// Функция fetch с таймаутом
+function fetchWithTimeout(url, options = {}) {
+    const { timeout = 8000, ...fetchOptions } = options;
+    
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`Request timeout after ${timeout}ms`));
+        }, timeout);
+        
+        fetch(url, fetchOptions)
+            .then(response => {
+                clearTimeout(timer);
+                resolve(response);
+            })
+            .catch(err => {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
 }
 
 // Обработка сообщений от админ-панели
