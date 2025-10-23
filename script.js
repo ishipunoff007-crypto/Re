@@ -5,55 +5,18 @@ const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxyYLuHzLVPg9
 const form = document.getElementById('bookingForm');
 const phoneInput = document.getElementById('phone');
 const successMessage = document.getElementById('successMessage');
-const bookingDisabledMessage = document.getElementById('bookingDisabledMessage');
-const submitButton = document.getElementById('submitBtn');
-const loadingIndicator = document.getElementById('loadingIndicator');
 const globalError = document.getElementById('globalError');
+const submitButton = document.getElementById('submitBtn');
 
 // Переменные состояния
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let selectedDate = null;
 let selectedTime = null;
-let isBookingActive = true;
-let availableSlotsCache = {};
-
-// Mock данные для тестирования
-const MOCK_DATA = {
-    bookingStatus: { isActive: true },
-    timeSlots: ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00"],
-    dateAvailability: {}
-};
-
-// Генерация mock доступности дат
-function generateMockDateAvailability() {
-    const today = new Date();
-    const result = {};
-    
-    for (let i = 0; i < 28; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + i);
-        const dateStr = formatDateForStorage(date);
-        
-        // Выходные - нет слотов
-        if (date.getDay() === 0) {
-            result[dateStr] = 0;
-        } else {
-            // Будние дни - случайное количество слотов
-            result[dateStr] = Math.floor(Math.random() * 8) + 5;
-        }
-    }
-    
-    return result;
-}
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
-    // Инициализируем mock данные
-    MOCK_DATA.dateAvailability = generateMockDateAvailability();
-    
     initializeCalendar();
-    loadBookingStatus();
     setupEventListeners();
     hideTimeSelection();
 });
@@ -134,9 +97,6 @@ function renderCalendar() {
         const dayElement = createDayElement(date, today);
         calendarGrid.appendChild(dayElement);
     }
-    
-    // Загружаем доступность дат
-    loadDateAvailability();
 }
 
 // Создание элемента дня
@@ -150,15 +110,19 @@ function createDayElement(date, today) {
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     const isFourWeeksLimit = isWithinFourWeeks(date);
     
-    dayElement.classList.add(isCurrentMonth ? 'available' : 'unavailable');
+    // Базовые классы
+    if (isCurrentMonth) {
+        dayElement.classList.add('available');
+    } else {
+        dayElement.classList.add('unavailable');
+    }
+    
     if (isPast) dayElement.classList.add('past');
     if (isWeekend) dayElement.classList.add('weekend');
     if (!isFourWeeksLimit) dayElement.classList.add('unavailable');
     
-    dayElement.innerHTML = `
-        <div class="day-number">${date.getDate()}</div>
-        <div class="day-availability" id="availability-${formatDateForStorage(date)}"></div>
-    `;
+    // Только число, без надписи со слотами
+    dayElement.innerHTML = `<div class="day-number">${date.getDate()}</div>`;
     
     // Добавляем обработчик только для доступных дат
     if (isCurrentMonth && !isPast && isFourWeeksLimit) {
@@ -182,39 +146,8 @@ function isWithinFourWeeks(date) {
     return date >= today && date <= fourWeeksLater;
 }
 
-// Загрузка доступности дат
-async function loadDateAvailability() {
-    try {
-        // Используем mock данные
-        await new Promise(resolve => setTimeout(resolve, 500)); // Имитация загрузки
-        
-        updateDateAvailabilityDisplay(MOCK_DATA.dateAvailability);
-    } catch (error) {
-        console.error('Error loading date availability:', error);
-        // Используем mock данные даже при ошибке
-        updateDateAvailabilityDisplay(MOCK_DATA.dateAvailability);
-    }
-}
-
-// Обновление отображения доступности дат
-function updateDateAvailabilityDisplay(dateAvailability) {
-    Object.keys(dateAvailability).forEach(dateStr => {
-        const availabilityElement = document.getElementById(`availability-${dateStr}`);
-        if (availabilityElement) {
-            const slots = dateAvailability[dateStr];
-            if (slots > 0) {
-                availabilityElement.textContent = `${slots} слотов`;
-                availabilityElement.style.color = 'var(--success)';
-            } else {
-                availabilityElement.textContent = 'нет мест';
-                availabilityElement.style.color = 'var(--danger)';
-            }
-        }
-    });
-}
-
 // Выбор даты
-async function selectDate(date, element) {
+function selectDate(date, element) {
     // Сбрасываем предыдущий выбор
     document.querySelectorAll('.calendar-day').forEach(el => {
         el.classList.remove('selected');
@@ -225,7 +158,6 @@ async function selectDate(date, element) {
     document.getElementById('selectedDate').value = formatDateForStorage(date);
     
     showTimeSelection();
-    await loadAvailableTimeSlots(date);
     hideError(null, 'dateError');
 }
 
@@ -243,6 +175,9 @@ function showTimeSelection() {
     
     selectedDateInfo.textContent = `Выбрана дата: ${dateString}`;
     timeSelection.style.display = 'block';
+    
+    // Генерируем временные слоты
+    generateTimeSlots();
 }
 
 // Скрыть выбор времени
@@ -257,69 +192,35 @@ function hideTimeSelection() {
     });
 }
 
-// Загрузка доступных слотов времени
-async function loadAvailableTimeSlots(date) {
+// Генерация временных слотов
+function generateTimeSlots() {
     const timeSlotsContainer = document.getElementById('timeSlots');
     const noSlotsMessage = document.getElementById('noSlotsMessage');
-    const dateString = formatDateForStorage(date);
     
-    // Показываем индикатор загрузки
     timeSlotsContainer.innerHTML = '';
     noSlotsMessage.style.display = 'none';
-    timeSlotsContainer.innerHTML = `
-        <div class="loading" style="text-align: center; padding: 20px; color: #666;">
-            <i class="fas fa-spinner fa-spin"></i> Загрузка доступного времени...
-        </div>
-    `;
     
-    try {
-        // Имитация загрузки
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Проверяем кэш
-        if (availableSlotsCache[dateString]) {
-            renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
-            return;
-        }
-        
-        // Используем mock данные
-        const dateObj = new Date(dateString);
-        const isWeekend = dateObj.getDay() === 0; // Воскресенье - выходной
-        
-        if (isWeekend) {
-            availableSlotsCache[dateString] = [];
-        } else {
-            // Фильтруем слоты для реалистичности
-            const availableSlots = MOCK_DATA.timeSlots.filter((_, index) => 
-                Math.random() > 0.3 || index % 2 === 0
-            );
-            availableSlotsCache[dateString] = availableSlots;
-        }
-        
-        renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
-        
-    } catch (error) {
-        console.error('Error loading time slots:', error);
-        timeSlotsContainer.innerHTML = '';
-        noSlotsMessage.style.display = 'block';
-        noSlotsMessage.innerHTML = `
-            <i class="fas fa-exclamation-triangle"></i> Ошибка загрузки времени. Пожалуйста, попробуйте позже.
-        `;
-    }
-}
-
-// Рендер слотов времени
-function renderTimeSlots(availableSlots, container, noSlotsMessage) {
-    container.innerHTML = '';
+    // Фиксированные рабочие часы
+    const workHours = { start: "09:00", end: "20:00" };
+    const slots = [];
     
-    if (!availableSlots || availableSlots.length === 0) {
-        noSlotsMessage.style.display = 'block';
-        return;
+    let currentHour = 9;
+    let currentMinute = 0;
+    
+    // Генерируем слоты с 9:00 до 20:00 каждые 30 минут
+    while (currentHour < 20 || (currentHour === 20 && currentMinute === 0)) {
+        const timeString = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+        slots.push(timeString);
+        
+        currentMinute += 30;
+        if (currentMinute >= 60) {
+            currentHour += 1;
+            currentMinute = 0;
+        }
     }
     
-    noSlotsMessage.style.display = 'none';
-    
-    availableSlots.forEach(slot => {
+    // Показываем все слоты как доступные
+    slots.forEach(slot => {
         const timeElement = document.createElement('button');
         timeElement.className = 'time-slot available';
         timeElement.type = 'button';
@@ -329,7 +230,7 @@ function renderTimeSlots(availableSlots, container, noSlotsMessage) {
             selectTime(slot, timeElement);
         });
         
-        container.appendChild(timeElement);
+        timeSlotsContainer.appendChild(timeElement);
     });
 }
 
@@ -358,11 +259,6 @@ function setupEventListeners() {
     // Обработчик отправки формы
     form.addEventListener('submit', function(e) {
         e.preventDefault();
-        
-        if (!isBookingActive) {
-            showGlobalError('Запись временно приостановлена. Пожалуйста, попробуйте позже или свяжитесь с нами по телефону.');
-            return;
-        }
         
         if (!validateForm()) {
             scrollToFirstError();
@@ -439,34 +335,6 @@ function validateField(field) {
     }
 }
 
-// Загрузка статуса записи
-async function loadBookingStatus() {
-    try {
-        // Используем mock данные
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        isBookingActive = MOCK_DATA.bookingStatus.isActive;
-        updateBookingUI();
-    } catch (error) {
-        console.error('Error loading booking status:', error);
-        isBookingActive = true;
-        updateBookingUI();
-    }
-}
-
-// Обновление UI в зависимости от статуса записи
-function updateBookingUI() {
-    if (isBookingActive) {
-        bookingDisabledMessage.style.display = 'none';
-        form.style.display = 'block';
-        submitButton.disabled = false;
-    } else {
-        bookingDisabledMessage.style.display = 'block';
-        form.style.display = 'block';
-        submitButton.disabled = true;
-    }
-}
-
 // Валидация формы
 function validateForm() {
     let isValid = true;
@@ -523,22 +391,31 @@ async function submitForm() {
         timestamp: new Date().toISOString()
     };
 
+    console.log("🔄 Отправляю данные:", formData);
     showLoading();
 
     try {
-        // Имитация отправки
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(formData),
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            }
+        });
         
-        // В реальном приложении здесь был бы запрос к Google Apps Script
-        console.log('Форма отправлена:', formData);
+        console.log("📨 Ответ от сервера:", response.status);
         
-        showSuccessMessage(formData);
-        resetForm();
-        // Очищаем кэш для обновления доступности
-        availableSlotsCache = {};
+        const data = await response.json();
+        console.log("📊 Данные ответа:", data);
         
+        if (data.result === 'success') {
+            showSuccessMessage(formData);
+            resetForm();
+        } else {
+            throw new Error(data.message || 'Неизвестная ошибка');
+        }
     } catch (error) {
-        console.error('Ошибка при отправке:', error);
+        console.error('❌ Ошибка при отправке:', error);
         showGlobalError('Не удалось отправить запись. Пожалуйста, попробуйте еще раз или свяжитесь с нами по телефону.');
     } finally {
         hideLoading();
@@ -550,7 +427,6 @@ function showSuccessMessage(formData) {
     successMessage.style.display = 'block';
     successMessage.scrollIntoView({ behavior: 'smooth' });
     
-    // Обновляем текст сообщения
     const messageText = document.getElementById('successMessageText');
     messageText.textContent = `Спасибо, ${formData.name}! Ваша запись на ${formData.date} в ${formData.time} принята. Мы свяжемся с вами для подтверждения.`;
     
@@ -624,18 +500,4 @@ function hideLoading() {
     document.querySelector('.btn-text').style.display = 'inline-block';
     document.querySelector('.btn-loading').style.display = 'none';
 }
-
-// Автоматическое обновление статуса каждые 5 минут
-setInterval(() => {
-    loadBookingStatus();
-}, 300000);
-
-// Обработка видимости страницы для обновления данных
-document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) {
-        loadBookingStatus();
-        loadDateAvailability();
-    }
-});
-
 
