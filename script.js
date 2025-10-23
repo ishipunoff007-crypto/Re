@@ -18,8 +18,40 @@ let selectedTime = null;
 let isBookingActive = true;
 let availableSlotsCache = {};
 
+// Mock данные для тестирования
+const MOCK_DATA = {
+    bookingStatus: { isActive: true },
+    timeSlots: ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00"],
+    dateAvailability: {}
+};
+
+// Генерация mock доступности дат
+function generateMockDateAvailability() {
+    const today = new Date();
+    const result = {};
+    
+    for (let i = 0; i < 28; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const dateStr = formatDateForStorage(date);
+        
+        // Выходные - нет слотов
+        if (date.getDay() === 0) {
+            result[dateStr] = 0;
+        } else {
+            // Будние дни - случайное количество слотов
+            result[dateStr] = Math.floor(Math.random() * 8) + 5;
+        }
+    }
+    
+    return result;
+}
+
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
+    // Инициализируем mock данные
+    MOCK_DATA.dateAvailability = generateMockDateAvailability();
+    
     initializeCalendar();
     loadBookingStatus();
     setupEventListeners();
@@ -152,21 +184,15 @@ function isWithinFourWeeks(date) {
 
 // Загрузка доступности дат
 async function loadDateAvailability() {
-    const today = new Date();
-    const fourWeeksLater = new Date();
-    fourWeeksLater.setDate(today.getDate() + 28);
-    
     try {
-        const data = await makeRequest('getDateAvailability', {
-            startDate: formatDateForStorage(today),
-            endDate: formatDateForStorage(fourWeeksLater)
-        });
+        // Используем mock данные
+        await new Promise(resolve => setTimeout(resolve, 500)); // Имитация загрузки
         
-        if (data.result === 'success' && data.dateAvailability) {
-            updateDateAvailabilityDisplay(data.dateAvailability);
-        }
+        updateDateAvailabilityDisplay(MOCK_DATA.dateAvailability);
     } catch (error) {
         console.error('Error loading date availability:', error);
+        // Используем mock данные даже при ошибке
+        updateDateAvailabilityDisplay(MOCK_DATA.dateAvailability);
     }
 }
 
@@ -247,21 +273,31 @@ async function loadAvailableTimeSlots(date) {
     `;
     
     try {
+        // Имитация загрузки
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
         // Проверяем кэш
         if (availableSlotsCache[dateString]) {
             renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
             return;
         }
         
-        const data = await makeRequest('getAvailableSlots', { date: dateString });
+        // Используем mock данные
+        const dateObj = new Date(dateString);
+        const isWeekend = dateObj.getDay() === 0; // Воскресенье - выходной
         
-        if (data.result === 'success' && data.availableSlots) {
-            // Сохраняем в кэш
-            availableSlotsCache[dateString] = data.availableSlots;
-            renderTimeSlots(data.availableSlots, timeSlotsContainer, noSlotsMessage);
+        if (isWeekend) {
+            availableSlotsCache[dateString] = [];
         } else {
-            throw new Error('No available slots data');
+            // Фильтруем слоты для реалистичности
+            const availableSlots = MOCK_DATA.timeSlots.filter((_, index) => 
+                Math.random() > 0.3 || index % 2 === 0
+            );
+            availableSlotsCache[dateString] = availableSlots;
         }
+        
+        renderTimeSlots(availableSlotsCache[dateString], timeSlotsContainer, noSlotsMessage);
+        
     } catch (error) {
         console.error('Error loading time slots:', error);
         timeSlotsContainer.innerHTML = '';
@@ -406,12 +442,11 @@ function validateField(field) {
 // Загрузка статуса записи
 async function loadBookingStatus() {
     try {
-        const data = await makeRequest('getBookingStatus');
+        // Используем mock данные
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        if (data.result === 'success') {
-            isBookingActive = data.isActive;
-            updateBookingUI();
-        }
+        isBookingActive = MOCK_DATA.bookingStatus.isActive;
+        updateBookingUI();
     } catch (error) {
         console.error('Error loading booking status:', error);
         isBookingActive = true;
@@ -491,16 +526,17 @@ async function submitForm() {
     showLoading();
 
     try {
-        const data = await makeRequest('', formData, 'POST');
+        // Имитация отправки
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
-        if (data.result === 'success') {
-            showSuccessMessage(formData);
-            resetForm();
-            // Очищаем кэш для обновления доступности
-            availableSlotsCache = {};
-        } else {
-            throw new Error(data.message || 'Неизвестная ошибка');
-        }
+        // В реальном приложении здесь был бы запрос к Google Apps Script
+        console.log('Форма отправлена:', formData);
+        
+        showSuccessMessage(formData);
+        resetForm();
+        // Очищаем кэш для обновления доступности
+        availableSlotsCache = {};
+        
     } catch (error) {
         console.error('Ошибка при отправке:', error);
         showGlobalError('Не удалось отправить запись. Пожалуйста, попробуйте еще раз или свяжитесь с нами по телефону.');
@@ -558,49 +594,6 @@ function resetForm() {
     });
 }
 
-// Универсальная функция для запросов к Google Apps Script
-function makeRequest(action, params = {}, method = 'GET') {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        let url = GOOGLE_SCRIPT_URL;
-        if (method === 'GET' && action) {
-            url += '?action=' + encodeURIComponent(action);
-            for (const key in params) {
-                url += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
-            }
-        }
-        
-        xhr.open(method, url, true);
-        
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        const data = JSON.parse(xhr.responseText);
-                        resolve(data);
-                    } catch (e) {
-                        reject(new Error('Invalid JSON response'));
-                    }
-                } else {
-                    reject(new Error('Request failed with status: ' + xhr.status));
-                }
-            }
-        };
-        
-        xhr.onerror = function() {
-            reject(new Error('Network error'));
-        };
-        
-        if (method === 'POST') {
-            const payload = action ? { action, ...params } : params;
-            xhr.send(JSON.stringify(payload));
-        } else {
-            xhr.send();
-        }
-    });
-}
-
 // Вспомогательные функции
 function formatDateForStorage(date) {
     return date.toISOString().split('T')[0];
@@ -644,3 +637,4 @@ document.addEventListener('visibilitychange', function() {
         loadDateAvailability();
     }
 });
+
