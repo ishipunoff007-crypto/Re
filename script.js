@@ -154,7 +154,17 @@ function selectDate(date, element) {
     
     element.classList.add('selected');
     selectedDate = date;
-    document.getElementById('selectedDate').value = formatDateForStorage(date);
+    
+    // Создаем скрытое поле для даты если его нет
+    let dateInput = document.getElementById('selectedDate');
+    if (!dateInput) {
+        dateInput = document.createElement('input');
+        dateInput.type = 'hidden';
+        dateInput.id = 'selectedDate';
+        dateInput.name = 'selectedDate';
+        form.appendChild(dateInput);
+    }
+    dateInput.value = formatDateForStorage(date);
     
     hideError(null, 'dateError');
     updateSubmitButton();
@@ -191,7 +201,11 @@ function showSelectedDateInfo(date) {
 // Очистка выбора даты
 function clearDateSelection() {
     selectedDate = null;
-    document.getElementById('selectedDate').value = '';
+    
+    const dateInput = document.getElementById('selectedDate');
+    if (dateInput) {
+        dateInput.value = '';
+    }
     
     document.querySelectorAll('.calendar-day').forEach(el => {
         el.classList.remove('selected');
@@ -371,19 +385,18 @@ async function submitForm() {
     const formData = {
         name: document.getElementById('name').value.trim(),
         phone: phoneInput.value,
-        date: document.getElementById('selectedDate').value, // Только дата
+        date: document.getElementById('selectedDate').value,
         service: document.getElementById('service').value,
         carModel: document.getElementById('carModel').value.trim(),
         comments: document.getElementById('comments').value.trim(),
         timestamp: new Date().toISOString()
     };
 
-    console.log("🔄 Отправляю данные:", formData);
+    console.log("🔄 Отправляю данные на сервер:", formData);
     showLoading();
     isSubmitting = true;
 
     try {
-        // Важно: используем text/plain для обхода CORS
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             headers: {
@@ -392,25 +405,45 @@ async function submitForm() {
             body: JSON.stringify(formData)
         });
         
-        const result = await response.text();
-        console.log("📊 Ответ от сервера:", result);
+        console.log("📨 Статус ответа:", response.status, response.statusText);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const resultText = await response.text();
+        console.log("📊 Ответ сервера (текст):", resultText);
         
         let data;
         try {
-            data = JSON.parse(result);
-        } catch (e) {
-            throw new Error('Неверный формат ответа от сервера');
+            data = JSON.parse(resultText);
+        } catch (parseError) {
+            console.error("❌ Ошибка парсинга JSON ответа:", parseError);
+            throw new Error('Сервер вернул неверный формат данных');
         }
         
+        console.log("📊 Ответ сервера (объект):", data);
+        
         if (data.result === 'success') {
+            console.log("✅ Успешная отправка!");
             showSuccessMessage(formData);
             resetForm();
         } else {
-            throw new Error(data.message || 'Ошибка при сохранении записи');
+            throw new Error(data.message || 'Неизвестная ошибка сервера');
         }
     } catch (error) {
         console.error('❌ Ошибка при отправке:', error);
-        showGlobalError(error.message);
+        
+        let errorMessage = 'Ошибка при отправке формы';
+        if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Не удалось соединиться с сервером. Проверьте интернет.';
+        } else if (error.message.includes('HTTP error')) {
+            errorMessage = 'Ошибка сервера. Попробуйте позже.';
+        } else {
+            errorMessage = error.message;
+        }
+        
+        showGlobalError(errorMessage);
     } finally {
         hideLoading();
         isSubmitting = false;
