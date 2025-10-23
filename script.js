@@ -1,5 +1,5 @@
 // Конфигурация для Google Apps Script
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxyYLuHzLVPg9xOjXW9W67AT4zwVSS7_Qb0QcOy2h4gldEVAMiPfjYVzbju6nFJftq5Rg/exec";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz78ph7_05mXQwZcDVu-tl9BiY6VroE2euz8bYlNEKwQCceghdv8lyxrti7JWwozg2Czw/exec";
 
 // DOM элементы
 const form = document.getElementById('bookingForm');
@@ -527,4 +527,5 @@ function hideLoading() {
     updateSubmitButton();
     submitButton.innerHTML = '<span class="btn-text">Записаться</span>';
 }
+
 
