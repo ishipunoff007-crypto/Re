@@ -1,6 +1,8 @@
 // Конфигурация для Google Apps Script
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz78ph7_05mXQwZcDVu-tl9BiY6VroE2euz8bYlNEKwQCceghdv8lyxrti7JWwozg2Czw/exec";
 
+const STATUS_URL = "https://raw.githubusercontent.com/ishipunoff007-crypto/ishipunoff007-crypto.github.io/main/booking-status.json";
+
 // DOM элементы
 const form = document.getElementById('bookingForm');
 const phoneInput = document.getElementById('phone');
@@ -13,13 +15,33 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let selectedDate = null;
 let isSubmitting = false;
+let bookingStatus = { bookingActive: true, message: '' }; // Значение по умолчанию
 
 // Инициализация
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    await checkBookingStatus();
     initializeCalendar();
     setupEventListeners();
     updateSubmitButton();
 });
+
+// Проверка статуса записи из GitHub
+async function checkBookingStatus() {
+    try {
+        console.log('🔍 Проверяю статус записи...');
+        const response = await fetch(STATUS_URL + '?t=' + Date.now()); // Добавляем timestamp чтобы избежать кэширования
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        bookingStatus = data;
+        console.log('📊 Статус записи:', bookingStatus.bookingActive ? 'АКТИВНА' : 'ПРИОСТАНОВЛЕНА');
+    } catch (error) {
+        console.error('❌ Ошибка загрузки статуса:', error);
+        // Используем значения по умолчанию если не удалось загрузить
+        bookingStatus = { bookingActive: true, message: 'Запись временно приостановлена' };
+    }
+}
 
 // Инициализация календаря
 function initializeCalendar() {
@@ -221,52 +243,65 @@ function clearDateSelection() {
 
 // Настройка обработчиков событий
 function setupEventListeners() {
-    // Маска для телефона
+    // Проверка приостановки записи
+    if (!bookingStatus.bookingActive) {
+        document.getElementById('bookingDisabledMessage').style.display = 'block';
+        document.getElementById('pauseMessageText').textContent = bookingStatus.message;
+        
+        // Блокируем форму
+        const formElements = form.querySelectorAll('input, select, textarea, button');
+        formElements.forEach(element => {
+            element.disabled = true;
+            element.style.opacity = '0.6';
+        });
+        
+        // Блокируем календарь
+        document.querySelectorAll('.calendar-day, .date-nav-btn').forEach(element => {
+            element.disabled = true;
+        });
+        
+        // Меняем кнопку
+        submitButton.innerHTML = 'Запись приостановлена';
+        submitButton.style.background = 'var(--gray-medium)';
+        
+        return; // Не настраиваем обработчики событий
+    }
+
+    // Если запись активна - настраиваем как обычно
     phoneInput.addEventListener('input', function(e) {
         let value = e.target.value.replace(/\D/g, '');
-        
-        // Если начинается с 7 или 8, убираем
         if (value.startsWith('7') || value.startsWith('8')) {
             value = value.substring(1);
         }
-        
-        // Форматирование
         let formattedValue = '+7';
         if (value.length > 0) formattedValue += ' (' + value.substring(0, 3);
         if (value.length > 3) formattedValue += ') ' + value.substring(3, 6);
         if (value.length > 6) formattedValue += '-' + value.substring(6, 8);
         if (value.length > 8) formattedValue += '-' + value.substring(8, 10);
-        
         e.target.value = formattedValue;
         updateSubmitButton();
     });
 
-    // Обработчик отправки формы
     form.addEventListener('submit', function(e) {
         e.preventDefault();
-        
         if (!validateForm()) {
             scrollToFirstError();
             return;
         }
-
         submitForm();
     });
 
-    // Валидация при изменении полей
     form.querySelectorAll('input, select, textarea').forEach(element => {
         element.addEventListener('input', function() {
             validateField(this);
             updateSubmitButton();
         });
-        
         element.addEventListener('blur', function() {
             validateField(this);
             updateSubmitButton();
         });
     });
 
-    // Обработчик для кнопки согласия
     document.getElementById('agree').addEventListener('change', function() {
         validateField(this);
         updateSubmitButton();
@@ -378,8 +413,14 @@ function scrollToFirstError() {
     }
 }
 
-// ОТПРАВКА ФОРМЫ - ПОЛНОСТЬЮ ПЕРЕРАБОТАННАЯ ЛОГИКА
+// ОТПРАВКА ФОРМЫ
 async function submitForm() {
+    // Проверка приостановки записи
+    if (!bookingStatus.bookingActive) {
+        showGlobalError(bookingStatus.message);
+        return;
+    }
+    
     if (isSubmitting) return;
     
     const formData = {
@@ -507,47 +548,6 @@ function sendFormDataUniversal(formData) {
     });
 }
 
-// АЛЬТЕРНАТИВНЫЙ МЕТОД - Image Beacon (самый надежный для мобильных)
-function sendViaImageBeacon(formData) {
-    return new Promise((resolve) => {
-        // Создаем URL с данными в параметрах
-        const params = new URLSearchParams();
-        for (const key in formData) {
-            params.append(key, formData[key]);
-        }
-        
-        const url = `${GOOGLE_SCRIPT_URL}?${params.toString()}`;
-        
-        // Создаем изображение для отправки данных
-        const img = new Image();
-        img.src = url;
-        img.style.display = 'none';
-        
-        img.onload = function() {
-            console.log('✅ Image beacon: данные отправлены');
-            document.body.removeChild(img);
-            resolve({ success: true });
-        };
-        
-        img.onerror = function() {
-            console.log('⚠️ Image beacon: ошибка, но данные могли уйти');
-            document.body.removeChild(img);
-            resolve({ success: true });
-        };
-        
-        document.body.appendChild(img);
-        
-        // Таймаут
-        setTimeout(() => {
-            if (document.body.contains(img)) {
-                document.body.removeChild(img);
-            }
-            console.log('✅ Image beacon: таймаут, считаем отправленным');
-            resolve({ success: true });
-        }, 5000);
-    });
-}
-
 // Показать сообщение об успехе
 function showSuccessMessage(formData) {
     successMessage.style.display = 'block';
@@ -625,4 +625,5 @@ function hideLoading() {
     updateSubmitButton();
     submitButton.innerHTML = '<span class="btn-text">Записаться</span>';
 }
+
 
